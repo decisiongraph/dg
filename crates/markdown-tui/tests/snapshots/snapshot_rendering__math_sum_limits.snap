@@ -1,0 +1,8 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 189
+expression: "render_latex(r\"\\sum_{i=0}^{n} i\").unwrap()"
+---
+  n
+  ∑   i
+i = 0

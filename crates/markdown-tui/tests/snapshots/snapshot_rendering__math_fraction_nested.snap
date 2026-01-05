@@ -1,0 +1,10 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 159
+expression: "render_latex(r\"\\frac{\\frac{a}{b}}{c}\").unwrap()"
+---
+a
+─
+b
+─
+c

@@ -1,0 +1,12 @@
+[package]
+name = "dg-gherkin"
+version = "0.1.0"
+edition = "2021"
+description = "Gherkin parsing, semantic validation, and diagram generation for DecisionGraph"
+
+[dependencies]
+gherkin = { version = "0.15", features = ["parser"] }
+thiserror = "2"
+
+[dev-dependencies]
+insta = "1"

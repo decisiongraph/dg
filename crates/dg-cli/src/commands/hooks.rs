@@ -1,0 +1,375 @@
+//! Hook handlers for AI agents and git hooks.
+//!
+//! These commands are called by wrapper scripts (Claude Code hooks, git hooks).
+//! Putting logic here allows users to upgrade dg and get new functionality
+//! without regenerating hook scripts.
+
+use std::path::Path;
+use std::process::Command;
+
+use anyhow::{Context, Result};
+use clap::{Args, Subcommand};
+
+#[derive(Args)]
+pub struct HooksArgs {
+    #[command(subcommand)]
+    pub command: HooksCommand,
+}
+
+#[derive(Subcommand)]
+pub enum HooksCommand {
+    /// Check for FIXME/TBD markers after file write
+    CheckFixme {
+        /// Path to the file that was written
+        file_path: Option<String>,
+    },
+    /// Check if changed files match decision doc code_paths
+    CheckCode {
+        /// Changed file paths (from git diff or CLI args)
+        files: Vec<String>,
+    },
+    /// Git prepare-commit-msg hook: auto-add Refs trailer for staged docs
+    PrepareCommitMsg {
+        /// Path to the commit message file
+        message_file: String,
+        /// Source of the commit message (message, template, merge, squash, commit)
+        source: Option<String>,
+    },
+    /// Git commit-msg hook: warn if staged doc changes aren't referenced
+    CommitMsg {
+        /// Path to the commit message file
+        message_file: String,
+    },
+    /// PreToolUse hook: deny forbidden commands (e.g. dg init --eject)
+    DenyCommand,
+    /// Run linters for services/apps (AI agent integration)
+    CheckLint,
+}
+
+pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
+    match &args.command {
+        HooksCommand::CheckFixme { file_path } => check_fixme(file_path.as_deref()),
+        HooksCommand::CheckCode { files } => check_code(root, files),
+        HooksCommand::PrepareCommitMsg {
+            message_file,
+            source,
+        } => prepare_commit_msg(message_file, source.as_deref()),
+        HooksCommand::CommitMsg { message_file } => commit_msg(message_file),
+        HooksCommand::DenyCommand => deny_command(),
+        HooksCommand::CheckLint => check_lint(root),
+    }
+}
+
+fn check_fixme(file_path: Option<&str>) -> Result<()> {
+    let Some(path) = file_path else {
+        return Ok(());
+    };
+
+    // Only check files in docs/ directory
+    if !path.starts_with("docs/") {
+        return Ok(());
+    }
+
+    let path = Path::new(path);
+    if !path.is_file() {
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(path)?;
+    let content_upper = content.to_uppercase();
+
+    let markers = ["FIXME", "TBD", "TODO", "XXX", "[TBD]", "[FIXME]"];
+    let count: usize = markers
+        .iter()
+        .map(|m| content_upper.matches(m).count())
+        .sum();
+
+    if count > 0 {
+        eprintln!();
+        eprintln!("⚠️  Document has {count} incomplete marker(s) (TBD/FIXME).");
+        eprintln!("   Use AskUserQuestion to gather missing info, then update the document.");
+        eprintln!("   Only leave markers if user says they don't know or asks you to proceed.");
+        eprintln!();
+    }
+
+    Ok(())
+}
+
+fn check_code(root: &Path, files: &[String]) -> Result<()> {
+    if files.is_empty() {
+        return Ok(());
+    }
+
+    // Try to load schema: .dg/schema.kdl > built-in default; no .dg/ = skip
+    let dg_dir = root.join(".dg");
+    if !dg_dir.is_dir() {
+        return Ok(());
+    }
+
+    let schema_path = dg_dir.join("schema.kdl");
+    let schema = if schema_path.is_file() {
+        md_db::schema::Schema::from_file(&schema_path).context("failed to load schema")?
+    } else {
+        md_db::schema::Schema::from_str(dg_schemas::SCHEMA)
+            .context("failed to parse built-in schema")?
+    };
+
+    let matches =
+        md_db::code_paths::check_code_paths(root, &schema, files).context("check-code failed")?;
+
+    if matches.is_empty() {
+        return Ok(());
+    }
+
+    // Group by changed file
+    let mut by_file: std::collections::BTreeMap<&str, Vec<&md_db::code_paths::CodePathMatch>> =
+        std::collections::BTreeMap::new();
+    for m in &matches {
+        by_file.entry(&m.changed_file).or_default().push(m);
+    }
+
+    eprintln!();
+    eprintln!(
+        "⚠️  {} file(s) match decision doc code_paths:",
+        by_file.len()
+    );
+    for (file, doc_matches) in &by_file {
+        for m in doc_matches {
+            let title = m.title.as_deref().unwrap_or("untitled");
+            let status = m.status.as_deref().unwrap_or("unknown");
+            eprintln!("   {file}  →  {} \"{title}\" ({status})", m.doc_id);
+        }
+    }
+    eprintln!("   Review these docs and update if your changes affect the decisions.");
+    eprintln!();
+
+    Ok(())
+}
+
+/// Get staged file paths from git.
+fn staged_files() -> Vec<String> {
+    let output = Command::new("git")
+        .args(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
+        .output();
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| l.to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Extract document IDs from staged file paths (e.g. docs/architecture/adr-001-foo.md → ADR-001).
+fn extract_doc_ids(files: &[String]) -> Vec<String> {
+    let mut ids: Vec<String> = files
+        .iter()
+        .filter(|f| f.starts_with("docs/") && f.ends_with(".md"))
+        .filter_map(|f| {
+            let path = std::path::Path::new(f);
+            let id = md_db::graph::path_to_id(path);
+            // Only keep IDs that look like PREFIX-NNN (not arbitrary filenames)
+            if id.contains('-')
+                && id
+                    .split('-')
+                    .next()
+                    .is_some_and(|p| p.chars().all(|c| c.is_ascii_alphabetic()))
+                && id
+                    .split('-')
+                    .nth(1)
+                    .is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()))
+            {
+                Some(id)
+            } else {
+                None
+            }
+        })
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+fn prepare_commit_msg(message_file: &str, source: Option<&str>) -> Result<()> {
+    // Skip for merge/squash commits — git generates those messages
+    if matches!(source, Some("merge") | Some("squash")) {
+        return Ok(());
+    }
+
+    let ids = extract_doc_ids(&staged_files());
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    let content =
+        std::fs::read_to_string(message_file).context("failed to read commit message file")?;
+
+    // Don't add if Refs: trailer already exists
+    if content.lines().any(|l| l.starts_with("Refs:")) {
+        return Ok(());
+    }
+
+    let refs_line = format!("Refs: {}", ids.join(", "));
+
+    // Insert before comment lines (lines starting with #) at the end
+    let mut lines: Vec<&str> = content.lines().collect();
+    let insert_pos = lines
+        .iter()
+        .position(|l| l.starts_with('#'))
+        .unwrap_or(lines.len());
+
+    // Add blank line before Refs if needed
+    if insert_pos > 0 && !lines[insert_pos - 1].is_empty() {
+        lines.insert(insert_pos, "");
+        lines.insert(insert_pos + 1, &refs_line);
+    } else {
+        lines.insert(insert_pos, &refs_line);
+    }
+
+    // Ensure trailing newline
+    let mut result = lines.join("\n");
+    if !result.ends_with('\n') {
+        result.push('\n');
+    }
+
+    std::fs::write(message_file, result).context("failed to write commit message file")?;
+
+    Ok(())
+}
+
+fn commit_msg(message_file: &str) -> Result<()> {
+    let content =
+        std::fs::read_to_string(message_file).context("failed to read commit message file")?;
+
+    let ids = extract_doc_ids(&staged_files());
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    // Check which IDs are mentioned anywhere in the commit message
+    let content_upper = content.to_uppercase();
+    let missing: Vec<&str> = ids
+        .iter()
+        .filter(|id| !content_upper.contains(id.as_str()))
+        .map(|s| s.as_str())
+        .collect();
+
+    if !missing.is_empty() {
+        eprintln!();
+        eprintln!(
+            "⚠️  Staged doc(s) not referenced in commit message: {}",
+            missing.join(", ")
+        );
+        eprintln!("   Consider adding: Refs: {}", missing.join(", "));
+        eprintln!();
+    }
+
+    // Always succeed — this is advisory, not blocking
+    Ok(())
+}
+
+fn check_lint(root: &Path) -> Result<()> {
+    let dirs = ["services", "apps", "infra"];
+
+    for kind_dir in &dirs {
+        let target = root.join(kind_dir);
+        let entries = match std::fs::read_dir(&target) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let service_dir = entry.path();
+            if !service_dir.is_dir() {
+                continue;
+            }
+
+            let folder_name = service_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+
+            let tech = md_db::service::extract_tech_stack(&service_dir);
+            let practices = md_db::service::detect_engineering_practices(
+                &service_dir,
+                &tech.primary_language,
+                None,
+            );
+
+            if !practices.has_linter {
+                continue;
+            }
+            let tool = match &practices.linter_tool {
+                Some(t) => t,
+                None => continue,
+            };
+            let cmd = match md_db::service::resolve_lint_command(tool) {
+                Some(c) => c,
+                None => continue,
+            };
+
+            let result = md_db::service::run_linter(&service_dir, &cmd);
+
+            if result.command_not_found {
+                continue;
+            }
+
+            if !result.success {
+                let count = result.issues.len();
+                if count > 0 {
+                    eprintln!();
+                    eprintln!(
+                        "\u{26a0}\u{fe0f}  {tool} found {count} issue(s) in {kind_dir}/{folder_name}:"
+                    );
+                    for issue in result.issues.iter().take(10) {
+                        eprintln!("   {}", issue.to_hint_line());
+                    }
+                    if count > 10 {
+                        eprintln!("   ... and {} more", count - 10);
+                    }
+                    eprintln!("   Fix these linter issues before committing.");
+                    eprintln!();
+                } else {
+                    eprintln!();
+                    eprintln!("\u{26a0}\u{fe0f}  {tool} failed in {kind_dir}/{folder_name}.");
+                    for line in result.stderr.lines().take(5) {
+                        eprintln!("   {line}");
+                    }
+                    eprintln!();
+                }
+            }
+        }
+    }
+
+    // Always exit 0 — advisory only
+    Ok(())
+}
+
+/// Deny forbidden commands in PreToolUse Bash hook.
+/// Reads CLAUDE_TOOL_INPUT env (JSON with "command" field).
+/// Prints block JSON to stdout if command is forbidden.
+fn deny_command() -> Result<()> {
+    let input = std::env::var("CLAUDE_TOOL_INPUT").unwrap_or_default();
+    let command = serde_json::from_str::<serde_json::Value>(&input)
+        .ok()
+        .and_then(|v| v.get("command").and_then(|c| c.as_str()).map(String::from))
+        .unwrap_or_default();
+
+    const DENIED: &[(&str, &str)] = &[(
+        "dg init --eject",
+        "dg init --eject is reserved for humans only. Ask the user to run it manually.",
+    )];
+
+    for (pattern, reason) in DENIED {
+        if command.contains(pattern) {
+            let response = serde_json::json!({
+                "decision": "block",
+                "reason": reason,
+            });
+            println!("{}", response);
+            return Ok(());
+        }
+    }
+
+    Ok(())
+}

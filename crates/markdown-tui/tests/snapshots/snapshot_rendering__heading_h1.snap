@@ -1,0 +1,6 @@
+---
+source: crates/markdown-tui/tests/snapshot_rendering.rs
+assertion_line: 7
+expression: "render_markdown_plain(\"# Hello World\")"
+---
+# Hello World

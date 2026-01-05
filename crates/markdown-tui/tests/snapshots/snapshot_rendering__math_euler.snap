@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 204
+expression: "render_latex(r\"e^{i\\pi} + 1 = 0\").unwrap()"
+---
+ iπ
+e   + 1 = 0

@@ -1,0 +1,58 @@
+org "example-corp" {
+    name "Example Corp"
+}
+
+org "example-corp-eu" {
+    name "Example Corp EU"
+    parent "example-corp"
+}
+
+user "onni" {
+    name "Onni Example"
+    title "Staff Engineer"
+    email "onni@example.com"
+    teams "platform" "leadership"
+    org "example-corp"
+    role "staff-engineer"
+}
+
+user "alice" {
+    name "Alice Smith"
+    email "alice@example.com"
+    teams "platform"
+}
+
+user "bob" {
+    name "Bob Jones"
+    email "bob@example.com"
+    teams "security"
+}
+
+user "cto" {
+    name "CTO"
+    title "Chief Technology Officer"
+    email "cto@example.com"
+    teams "leadership"
+}
+
+team "platform" {
+    name "Platform Team"
+    slack "#platform"
+    lead "onni"
+    org "example-corp-eu"
+}
+
+team "security" {
+    name "Security Team"
+    slack "#security"
+    parent "engineering"
+}
+
+team "leadership" {
+    name "Leadership"
+}
+
+team "engineering" {
+    name "Engineering"
+    teams "platform" "security"
+}

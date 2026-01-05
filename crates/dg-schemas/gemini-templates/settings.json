@@ -1,0 +1,22 @@
+{
+  "context": {
+    "fileName": ["AGENTS.md", "GEMINI.md"]
+  },
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "^(Edit|WriteFile)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".gemini/hooks/check-fixme.sh"
+          },
+          {
+            "type": "command",
+            "command": ".gemini/hooks/check-code.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

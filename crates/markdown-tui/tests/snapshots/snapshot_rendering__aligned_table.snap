@@ -1,0 +1,10 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 56
+expression: "render_markdown_plain(\"| Left | Center | Right |\\n|:-----|:------:|------:|\\n| a | b | c |\")"
+---
+┌──────┬────────┬───────┐
+│ Left │ Center │ Right │
+├──────┼────────┼───────┤
+│ a    │   b    │     c │
+└──────┴────────┴───────┘

@@ -1,0 +1,19 @@
+type "readme" folder="." max_count=1 singleton=#true {
+    match "README.md"
+
+    section "Install" required=#true
+    section "Usage" required=#true
+    section "License" required=#true
+}
+
+type "service-readme" folder="services" singleton=#true {
+    match "README.md"
+
+    section "Overview" required=#true
+}
+
+type "changelog" folder="." max_count=1 singleton=#true {
+    match "CHANGELOG.md"
+
+    section "Unreleased"
+}

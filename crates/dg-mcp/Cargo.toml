@@ -1,0 +1,16 @@
+[package]
+name = "dg-mcp"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "DecisionGraph MCP server — AI agent integration via JSON-RPC over stdio"
+
+[[bin]]
+name = "dg-mcp"
+path = "src/main.rs"
+
+[dependencies]
+md-db = { workspace = true }
+dg-schemas = { path = "../dg-schemas" }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

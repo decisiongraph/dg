@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 83
+expression: "render_markdown_plain(\"> [!NOTE]\\n> Some note\")"
+---
+│ ℹ NOTE
+│ Some note

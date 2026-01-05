@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 234
+expression: s
+---
+

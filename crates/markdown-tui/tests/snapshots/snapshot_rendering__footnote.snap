@@ -1,0 +1,10 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 115
+expression: "render_markdown_plain(\"Text with ref[^1]\\n\\n[^1]: The footnote definition\")"
+---
+Text with ref[^1]
+
+
+───
+[^1]: The footnote definition

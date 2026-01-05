@@ -1,0 +1,184 @@
+// md-db schema definition
+// Defines document types, field constraints, section structure, and reference rules
+//
+// Relations are defined once at the schema level and are available as
+// frontmatter fields on ALL document types. Each relation has:
+//   - a name (the frontmatter key)
+//   - an optional inverse (auto-generates the reverse field name)
+//   - a cardinality: "one" (single ref) or "many" (ref array)
+//
+// Schema authors define whatever relationships make sense for their domain.
+// These are just examples — your project might use completely different ones.
+
+// ─── Relations ───────────────────────────────────────────────────────────────
+
+relation "supersedes" inverse="superseded_by" cardinality="one" description="Replaces a previous decision"
+relation "enables" inverse="enabled_by" cardinality="many"
+relation "triggers" inverse="caused_by" cardinality="many"
+relation "blocks" inverse="blocked_by" cardinality="many"
+relation "related" cardinality="many"
+
+// ─── ADR: Architecture Decision Record ───────────────────────────────────────
+
+type "adr" description="Architecture Decision Record" folder="docs/architecture" {
+    alias "architecture" "tech"
+    field "status" type="enum" required=#true description="Lifecycle state" default="proposed" {
+        values "proposed" "accepted" "rejected" "deprecated" "superseded"
+        transition "proposed" "accepted" "rejected"
+        transition "accepted" "deprecated" "superseded"
+    }
+    field "author" type="user" required=#true description="Decision maker"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" description="ISO 8601 date" default="$TODAY"
+    field "reviewers" type="user[]"
+    field "tags" type="string[]"
+
+    section "Decision" required=#true description="The decision and its rationale" {
+        content min-paragraphs=1
+    }
+    section "Consequences" required=#true {
+        section "Positive" required=#true
+        section "Negative"
+    }
+    section "Alternatives Considered" {
+        table description="Comparison matrix" {
+            column "Option" type="string" required=#true description="Name"
+            column "Score" type="number" description="Rating 1-10"
+            column "Notes" type="string"
+        }
+    }
+}
+
+// ─── OPP: Product Development Opportunity ────────────────────────────────────
+
+type "opp" folder="docs/opportunities" {
+    alias "opportunity"
+    field "status" type="enum" required=#true {
+        values "draft" "proposed" "exploring" "committed" "delivered" "parked" "rejected"
+        transition "draft" "proposed"
+        transition "proposed" "exploring" "rejected"
+        transition "exploring" "committed" "parked"
+        transition "committed" "delivered"
+    }
+    field "owner" type="user" required=#true
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    field "priority" type="enum" {
+        values "critical" "high" "medium" "low"
+    }
+    field "effort" type="enum" {
+        values "small" "medium" "large"
+    }
+    field "impact" type="enum" {
+        values "xs" "s" "m" "l" "xl"
+    }
+    field "stakeholders" type="user[]"
+
+    section "Problem" required=#true
+    section "Proposed Solution" required=#true
+    section "Success Criteria" required=#true
+    section "Risks" {
+        table {
+            column "Risk" type="string" required=#true
+            column "Likelihood" type="string"
+            column "Impact" type="string"
+            column "Mitigation" type="string"
+        }
+    }
+    section "Open Questions"
+    section "References"
+}
+
+// ─── POL: Policy / Corporate Policy & Strategy ──────────────────────────────
+
+type "pol" folder="docs/policies" {
+    alias "policy"
+    field "status" type="enum" required=#true {
+        values "draft" "review" "active" "retired" "superseded"
+        transition "draft" "review"
+        transition "review" "active"
+        transition "active" "retired" "superseded"
+    }
+    field "owner" type="user" required=#true
+    field "approver" type="user"
+    field "effective_date" type="string" pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    field "review_date" type="string" pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    field "category" type="enum" required=#true {
+        values "policy" "strategy" "standard" "guideline" "procedure"
+    }
+    field "audience" type="string[]" required=#true
+    field "tags" type="string[]"
+
+    section "Purpose" required=#true
+    section "Scope" required=#true
+    section "Policy" required=#true
+    section "Compliance" {
+        section "Requirements"
+        section "Exceptions"
+    }
+    section "Roles and Responsibilities" {
+        table {
+            column "Role" type="string" required=#true
+            column "Responsibility" type="string" required=#true
+        }
+    }
+    section "Review History" {
+        table {
+            column "Date" type="string" required=#true
+            column "Reviewer" type="user" required=#true
+            column "Changes" type="string"
+        }
+    }
+}
+
+// ─── INC: Incident Report ────────────────────────────────────────────────────
+
+type "inc" folder="docs/incidents" {
+    alias "incident"
+    field "status" type="enum" required=#true {
+        values "open" "mitigated" "resolved"
+        transition "open" "mitigated"
+        transition "mitigated" "resolved"
+    }
+    field "severity" type="enum" required=#true {
+        values "sev1" "sev2" "sev3" "sev4"
+    }
+    field "commander" type="user" required=#true
+    field "responders" type="user[]"
+    field "started_at" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}T"
+    field "resolved_at" type="string" pattern="^\\d{4}-\\d{2}-\\d{2}T"
+    field "duration_minutes" type="number"
+    field "affected_systems" type="string[]" required=#true
+    field "customer_impact" type="enum" required=#true {
+        values "none" "degraded" "partial_outage" "full_outage"
+    }
+    field "tags" type="string[]"
+
+    section "Summary" required=#true
+    section "Impact" required=#true
+    section "Timeline" required=#true {
+        table {
+            column "Time" type="string" required=#true
+            column "Event" type="string" required=#true
+            column "Actor" type="string"
+        }
+    }
+    section "Root Cause" required=#true
+    section "Resolution" required=#true
+    section "Action Items" required=#true {
+        table {
+            column "Action" type="string" required=#true
+            column "Owner" type="user" required=#true
+            column "Due Date" type="string"
+            column "Status" type="string"
+        }
+    }
+    section "Lessons Learned"
+}
+
+// ─── Reference resolution rules ──────────────────────────────────────────────
+
+ref-format {
+    // "ADR-005", "OPP-012", "POL-003", "INC-042"
+    string-id pattern="^(ADR|OPP|POL|INC)-\\d+$"
+    // "./adr-005.md", "../pol/pol-003.md"
+    relative-path pattern="\\.md$"
+}

@@ -1,0 +1,8 @@
+---
+source: crates/markdown-tui/tests/snapshot_rendering.rs
+assertion_line: 68
+expression: "render_markdown_plain(\"```rust\\nfn main() {}\\n```\")"
+---
+┌─ rust ─────┐
+│fn main() {}│
+└────────────┘

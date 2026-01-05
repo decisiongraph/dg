@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 135
+expression: render_markdown_plain(long)
+---
+This is a long paragraph that should exceed the default width of eighty 
+characters and trigger word wrapping behavior in the renderer output.

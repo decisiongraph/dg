@@ -1,0 +1,8 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 32
+expression: "render_markdown_plain(\"1. First\\n2. Second\\n3. Third\")"
+---
+1. First
+2. Second
+3. Third

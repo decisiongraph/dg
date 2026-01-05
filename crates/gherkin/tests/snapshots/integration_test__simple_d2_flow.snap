@@ -1,0 +1,20 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+f0: "User Login" {
+  s0: "Successful login" {
+    st0: "Given the user is on the login page" { shape: oval }
+    st1: "When the user enters valid credentials" { shape: diamond }
+    st0 -> st1
+    st2: "Then the user is redirected to dashboard" { shape: rectangle }
+    st1 -> st2
+  }
+  s1: "Failed login" {
+    st0: "Given the user is on the login page" { shape: oval }
+    st1: "When the user enters invalid credentials" { shape: diamond }
+    st0 -> st1
+    st2: "Then an error message is shown" { shape: rectangle }
+    st1 -> st2
+  }
+}

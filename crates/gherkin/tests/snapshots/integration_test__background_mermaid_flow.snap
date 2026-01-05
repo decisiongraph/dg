@@ -1,0 +1,28 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+flowchart TD
+    subgraph f0["Shopping Cart"]
+        subgraph f0_bg["Background"]
+            f0_bg_st0(["Given the user is logged in"])
+            f0_bg_st1(["And the cart is empty"])
+            f0_bg_st0 --> f0_bg_st1
+        end
+        subgraph f0_s0["Add item"]
+            f0_s0_st0(["Given the user views a product"])
+            f0_s0_st1{{"When the user clicks add to cart"}}
+            f0_s0_st0 --> f0_s0_st1
+            f0_s0_st2["Then the item appears in the cart"]
+            f0_s0_st1 --> f0_s0_st2
+        end
+        f0_bg_st1 -.-> f0_s0_st0
+        subgraph f0_s1["Remove item"]
+            f0_s1_st0(["Given the cart has one item"])
+            f0_s1_st1{{"When the user removes the item"}}
+            f0_s1_st0 --> f0_s1_st1
+            f0_s1_st2["Then the cart is empty"]
+            f0_s1_st1 --> f0_s1_st2
+        end
+        f0_bg_st1 -.-> f0_s1_st0
+    end

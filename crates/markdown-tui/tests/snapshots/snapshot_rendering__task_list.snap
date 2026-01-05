@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 44
+expression: "render_markdown_plain(\"- [x] Done\\n- [ ] Todo\")"
+---
+

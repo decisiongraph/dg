@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <!-- Reusable colors -->
+    <style>
+      .ring { fill: none; stroke: #47657a; stroke-width: 8; stroke-linecap: round; }
+      .circle-bg { fill: #dde5e5; }
+      .blue { fill: #7b9ead; }
+      .orange { fill: #f08153; }
+      .yellow { fill: #f7c562; }
+      .bright-orange { fill: #faa053; }
+      .line { fill: none; stroke: #47657a; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="200" height="200" fill="#fff"/>
+
+  <!-- Outer ring (broken circle) -->
+  <path class="ring" d="M 40 85 A 65 65 0 1 1 85 160"/>
+  <path class="ring" d="M 115 160 A 65 65 0 0 1 35 95"/>
+
+  <!-- Inner circle background -->
+  <circle class="circle-bg" cx="100" cy="100" r="55"/>
+
+  <!-- Top square (start node) -->
+  <rect class="blue" x="88" y="52" width="16" height="16" rx="2"/>
+
+  <!-- Diamond (decision node) -->
+  <rect class="bright-orange" x="91" y="78" width="14" height="14" rx="1" transform="rotate(45 98 85)"/>
+
+  <!-- Vertical connector line from top square to diamond -->
+  <line class="line" x1="96" y1="68" x2="96" y2="76"/>
+
+  <!-- Horizontal line from diamond going left -->
+  <line class="line" x1="88" y1="85" x2="72" y2="85"/>
+
+  <!-- Vertical line going down on left side -->
+  <line class="line" x1="72" y1="85" x2="72" y2="138"/>
+
+  <!-- Left column boxes -->
+  <!-- Box 1 (orange) -->
+  <rect class="orange" x="64" y="90" width="14" height="14" rx="2"/>
+
+  <!-- Box 2 (orange) -->
+  <rect class="orange" x="64" y="108" width="14" height="14" rx="2"/>
+
+  <!-- Box 3 (yellow) -->
+  <rect class="yellow" x="64" y="126" width="14" height="14" rx="2"/>
+
+  <!-- Horizontal line from diamond going right -->
+  <line class="line" x1="106" y1="85" x2="118" y2="85"/>
+
+  <!-- Arrow path (L-shape going right then down, then right to arrow) -->
+  <path fill="none" stroke="#f08153" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"
+        d="M 118 85 L 118 105 Q 118 115 128 115 L 155 115"/>
+
+  <!-- Yellow inner line for arrow -->
+  <path fill="none" stroke="#f7c562" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+        d="M 118 88 L 118 105 Q 118 112 125 112 L 152 112"/>
+
+  <!-- Arrow head -->
+  <polygon fill="#47657a" points="155,108 165,115 155,122"/>
+
+  <!-- Yellow box below arrow path -->
+  <rect class="yellow" x="126" y="122" width="14" height="14" rx="2"/>
+
+  <!-- Bottom center box (orange) -->
+  <rect class="orange" x="93" y="130" width="14" height="14" rx="2"/>
+
+  <!-- Connector from bottom center box up -->
+  <line class="line" x1="100" y1="130" x2="100" y2="115"/>
+  <line class="line" x1="100" y1="115" x2="118" y2="115"/>
+</svg>

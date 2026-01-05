@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 184
+expression: "render_latex(r\"\\lim_{x \\to 0}\").unwrap()"
+---
+lim(x → 0)

@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 194
+expression: "render_latex(r\"\\alpha + \\beta = \\gamma\").unwrap()"
+---
+α + β = γ

@@ -1,0 +1,441 @@
+@import "tailwindcss";
+
+@import "tw-animate-css";
+
+@import "katex/dist/katex.min.css";
+
+@import "highlight.js/styles/github.min.css";
+
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.984 0.003 247.858);
+  --sidebar-foreground: oklch(0.129 0.042 264.695);
+  --sidebar-primary: oklch(0.208 0.042 265.755);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.968 0.007 247.896);
+  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
+  --sidebar-border: oklch(0.929 0.013 255.508);
+  --sidebar-ring: oklch(0.704 0.04 256.788);
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@theme inline {
+  /* Document type colors */
+  --color-type-adr: #3b82f6;
+  --color-type-opp: #10b981;
+  --color-type-pol: #8b5cf6;
+  --color-type-inc: #ef4444;
+  --color-type-spec: #f59e0b;
+  --color-type-other: #6b7280;
+
+  /* Status colors */
+  --color-status-active: #10b981;
+  --color-status-proposed: #f59e0b;
+  --color-status-completed: #64748b;
+  --color-status-declined: #ef4444;
+  --color-status-deprecated: #ef4444;
+  --color-status-identified: #3b82f6;
+
+  /* Sidebar */
+  --sidebar-width: 16rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Ensure bg-card containers inherit proper text color in dark mode */
+  .bg-card {
+    color: var(--card-foreground);
+  }
+}
+
+/* Consequence list styling: green + / red - bullets for ADR pros/cons */
+.consequence-positive li {
+  list-style: none;
+  position: relative;
+  padding-left: 0.25em;
+}
+.consequence-positive li::before {
+  content: "+";
+  position: absolute;
+  left: -1.25em;
+  font-weight: 700;
+  color: #16a34a;
+}
+.dark .consequence-positive li::before {
+  color: #4ade80;
+}
+
+.consequence-negative li {
+  list-style: none;
+  position: relative;
+  padding-left: 0.25em;
+}
+.consequence-negative li::before {
+  content: "−";
+  position: absolute;
+  left: -1.25em;
+  font-weight: 700;
+  color: #dc2626;
+}
+.dark .consequence-negative li::before {
+  color: #f87171;
+}
+
+/* highlight.js: override for dark mode (github-dark colors) */
+.dark .hljs {
+  background: transparent;
+  color: #e6edf3;
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag { color: #ff7b72; }
+.dark .hljs-string,
+.dark .hljs-attr { color: #a5d6ff; }
+.dark .hljs-comment,
+.dark .hljs-quote { color: #8b949e; }
+.dark .hljs-number,
+.dark .hljs-literal { color: #79c0ff; }
+.dark .hljs-title,
+.dark .hljs-title\.function_,
+.dark .hljs-section { color: #d2a8ff; }
+.dark .hljs-built_in { color: #ffa657; }
+.dark .hljs-type,
+.dark .hljs-params { color: #ffa657; }
+.dark .hljs-variable,
+.dark .hljs-template-variable { color: #ffa657; }
+.dark .hljs-name,
+.dark .hljs-tag { color: #7ee787; }
+.dark .hljs-addition { color: #aff5b4; background: #033a16; }
+.dark .hljs-deletion { color: #ffdcd7; background: #67060c; }
+
+/* highlight.js: transparent bg so prose pre background shows through */
+.hljs { background: transparent; }
+
+/* Code blocks: adaptive bg (light in light mode, dark in dark mode) — matches GitHub */
+.prose pre {
+  background-color: #f6f8fa;
+  color: var(--foreground);
+  overflow-x: auto;
+}
+.prose pre code {
+  background-color: transparent;
+  color: inherit;
+}
+.dark .prose pre {
+  background-color: #161b22;
+  border: 1px solid var(--border);
+}
+
+/* Tables: scroll horizontally when wider than container */
+.prose table {
+  display: block;
+  overflow-x: auto;
+  max-width: fit-content;
+}
+
+/* Inline code: GitHub-style gray pill, remove Tailwind prose backtick pseudo-elements */
+.prose :not(pre) > code {
+  background: var(--muted);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  font-size: 85%;
+}
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after {
+  content: none;
+}
+
+/* Heading anchor links (appended after text, shown on hover) */
+.heading-anchor {
+  margin-left: 0.35em;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 0.15s;
+  text-decoration: none;
+}
+.heading-anchor svg {
+  display: inline-block;
+  vertical-align: baseline;
+  position: relative;
+  top: 0.05em;
+}
+h1:hover > .heading-anchor,
+h2:hover > .heading-anchor,
+h3:hover > .heading-anchor,
+h4:hover > .heading-anchor,
+h5:hover > .heading-anchor,
+h6:hover > .heading-anchor,
+.heading-anchor:focus-visible {
+  opacity: 0.6;
+}
+.heading-anchor:hover {
+  opacity: 1;
+}
+
+
+/* Auto-collapsible developer sections */
+.dev-section-collapsible {
+  margin: 1.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+.dev-section-collapsible > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--muted);
+  list-style: none;
+  user-select: none;
+}
+.dev-section-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+.dev-section-collapsible > summary::before {
+  content: '▸';
+  font-size: 0.75em;
+  flex-shrink: 0;
+}
+.dev-section-collapsible[open] > summary::before {
+  content: '▾';
+}
+.dev-section-collapsible > summary:hover {
+  background: color-mix(in srgb, var(--muted) 80%, var(--foreground) 5%);
+}
+.dev-section-collapsible > summary strong {
+  font-size: 1.25em;
+  color: var(--foreground);
+}
+.dev-section-hint {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.dev-section-collapsible[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+.dev-section-collapsible[open] .dev-section-hint {
+  display: none;
+}
+.dev-section-content {
+  padding: 0.5rem 1.5rem 1rem;
+}
+.dev-section-content ul,
+.dev-section-content ol {
+  padding-left: 1.5em;
+}
+
+/* Kill top margin on first content element in doc body (3-level HtmlContent nesting) */
+.doc-body > :first-child,
+.doc-body > :first-child > :first-child,
+.doc-body > :first-child > :first-child > :first-child {
+  margin-top: 0;
+}
+
+/* Footnotes (Wikipedia-style citations) */
+.footnotes {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.footnotes::before {
+  content: "References";
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+.footnotes ol {
+  padding-left: 1.5rem;
+}
+.footnotes li {
+  margin-bottom: 0.5rem;
+}
+.footnotes li p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+sup.footnote-ref a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+sup.footnote-ref a:hover {
+  text-decoration: underline;
+}
+.footnote-backref {
+  color: var(--muted-foreground);
+  text-decoration: none;
+  margin-left: 0.25rem;
+}
+.footnote-backref:hover {
+  color: var(--primary);
+}
+
+/* Footnote tooltip on hover */
+sup.footnote-has-tooltip {
+  position: relative;
+}
+sup.footnote-has-tooltip .footnote-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  width: max-content;
+  max-width: 320px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+  pointer-events: none;
+  margin-bottom: 4px;
+}
+sup.footnote-has-tooltip:hover .footnote-tooltip {
+  display: block;
+}
+
+/* Highlight animation when scrolled to */
+.footnote-highlight {
+  background: oklch(0.85 0.15 85 / 40%);
+  border-radius: 0.25rem;
+  transition: background 0.5s ease;
+}
+.dark .footnote-highlight {
+  background: oklch(0.45 0.15 85 / 40%);
+}
+
+/* SvelteFlow: match dark mode */
+.dark .svelte-flow {
+  --xy-background-color: var(--card);
+  --xy-background-pattern-dots-color: oklch(1 0 0 / 12%);
+  --xy-node-background-color: var(--card);
+  --xy-node-border: 1px solid var(--border);
+  --xy-node-color: var(--foreground);
+  --xy-edge-stroke: oklch(1 0 0 / 30%);
+  --xy-minimap-background-color: var(--background);
+  --xy-minimap-mask-background-color: oklch(0 0 0 / 0.5);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+}
+.dark .svelte-flow__edge-label {
+  background-color: var(--card);
+}

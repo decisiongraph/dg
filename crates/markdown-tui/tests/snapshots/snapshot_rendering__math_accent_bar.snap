@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 179
+expression: "render_latex(r\"\\bar{x}\").unwrap()"
+---
+x̄

@@ -1,0 +1,40 @@
+[package]
+name = "md-db"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Markdown-as-Database library — structured documents with YAML frontmatter validated against KDL schemas"
+repository = "https://github.com/decisiongraph/md-db-rs"
+
+[dependencies]
+comrak = { version = "0.36", default-features = false }
+gray_matter = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+walkdir = "2"
+glob = "0.3"
+kdl = "6"
+rayon = "1"
+regex = "1"
+htmlescape = "0.3"
+ignore = "0.4"
+rust-embed = { version = "8", features = ["include-exclude"] }
+lazy_static = "1"
+anyhow = "1"
+toml = "0.8"
+ureq = { version = "3", optional = true }
+graphs-tui = { version = "0.4.0", optional = true }
+dg-gherkin = { workspace = true, optional = true }
+git2 = { version = "0.19", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+syntax-highlight = ["comrak/syntect"]
+diagrams = ["dep:graphs-tui"]
+gherkin = ["dep:dg-gherkin"]
+git = ["dep:git2"]
+avatars = ["dep:ureq"]

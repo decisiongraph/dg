@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 93
+expression: "render_markdown_plain(\"> outer\\n> > inner\")"
+---
+│ outer
+│ │ inner

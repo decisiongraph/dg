@@ -1,0 +1,9 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+f0: "User Login"
+f0_s0: "Successful login" { shape: oval }
+f0 -> f0_s0
+f0_s1: "Failed login" { shape: oval }
+f0 -> f0_s1

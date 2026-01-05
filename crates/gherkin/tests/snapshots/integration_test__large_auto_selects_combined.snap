@@ -1,0 +1,52 @@
+---
+source: crates/gherkin/tests/integration_test.rs
+expression: output
+---
+flowchart LR
+    classDef given fill:#e1f5fe,stroke:#01579b,color:#000
+    classDef when fill:#fff9c4,stroke:#f9a825,color:#000
+    classDef then fill:#e8f5e9,stroke:#2e7d32,color:#000
+    classDef scenario fill:#fff,stroke:#9e9e9e,stroke-dasharray: 5 5,color:#616161
+
+    f0_0(["Given the user is on the homepage"]):::given
+    f0_0_1{{"When the user clicks on a category"}}:::when
+    f0_0 --> f0_0_1
+    f0_0_1_2["Then products in that category are shown"]:::then
+    f0_0_1 --> f0_0_1_2
+    f0_0_1_2_sc0["Browse products"]:::scenario
+    f0_0_1_2 -.-> f0_0_1_2_sc0
+    f0_0_3{{"When the user types in the search bar"}}:::when
+    f0_0 --> f0_0_3
+    f0_0_3_4{{"And the user presses enter"}}:::when
+    f0_0_3 --> f0_0_3_4
+    f0_0_3_4_5["Then matching products are displayed"]:::then
+    f0_0_3_4 --> f0_0_3_4_5
+    f0_0_3_4_5_sc0["Search products"]:::scenario
+    f0_0_3_4_5 -.-> f0_0_3_4_5_sc0
+    f0_6(["Given the user views a product"]):::given
+    f0_6_7{{"When the user clicks add to cart"}}:::when
+    f0_6 --> f0_6_7
+    f0_6_7_8["Then the product is added to the cart"]:::then
+    f0_6_7 --> f0_6_7_8
+    f0_6_7_8_9["And the cart count increases"]:::then
+    f0_6_7_8 --> f0_6_7_8_9
+    f0_6_7_8_9_sc0["Add to cart"]:::scenario
+    f0_6_7_8_9 -.-> f0_6_7_8_9_sc0
+    f0_10(["Given the user has items in the cart"]):::given
+    f0_10_11{{"When the user proceeds to checkout"}}:::when
+    f0_10 --> f0_10_11
+    f0_10_11_12{{"And the user enters shipping info"}}:::when
+    f0_10_11 --> f0_10_11_12
+    f0_10_11_12_13{{"And the user enters payment info"}}:::when
+    f0_10_11_12 --> f0_10_11_12_13
+    f0_10_11_12_13_14["Then the order is confirmed"]:::then
+    f0_10_11_12_13 --> f0_10_11_12_13_14
+    f0_10_11_12_13_14_sc0["Checkout"]:::scenario
+    f0_10_11_12_13_14 -.-> f0_10_11_12_13_14_sc0
+    f0_15(["Given the user has placed an order"]):::given
+    f0_15_16{{"When the user views order status"}}:::when
+    f0_15 --> f0_15_16
+    f0_15_16_17["Then the current status is displayed"]:::then
+    f0_15_16 --> f0_15_16_17
+    f0_15_16_17_sc0["Order tracking"]:::scenario
+    f0_15_16_17 -.-> f0_15_16_17_sc0

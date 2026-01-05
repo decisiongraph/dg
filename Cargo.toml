@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/dg-cli",
+    "crates/dg-schemas",
+    "crates/gherkin",
+    "crates/markdown-tui",
+    "crates/md-db",
+    "crates/dg-mcp",
+]
+exclude = ["cc-eval"]
+
+[workspace.dependencies]
+md-db = { path = "crates/md-db", features = ["diagrams", "gherkin"] }
+dg-gherkin = { path = "crates/gherkin" }
+markdown-tui = { path = "crates/markdown-tui", features = ["diagrams"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+serde_json = "1"
+serde_yaml = "0.9"
+
+[profile.dev.package."*"]
+debug = false
+strip = true
+
+[patch.crates-io]
+graphs-tui = { git = "https://github.com/decisiongraph/graphs-tui.git", branch = "fix/winnow-compat-presult" }
+
+[profile.release]
+lto = "thin"

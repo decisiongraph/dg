@@ -1,0 +1,23 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+flowchart TD
+    subgraph f0["User Profile"]
+        %% @smoke @critical
+        subgraph f0_s0["View profile"]
+            f0_s0_st0(["Given the user is logged in"])
+            f0_s0_st1{{"When the user navigates to profile"}}
+            f0_s0_st0 --> f0_s0_st1
+            f0_s0_st2["Then the profile page is displayed"]
+            f0_s0_st1 --> f0_s0_st2
+        end
+        %% @regression
+        subgraph f0_s1["Edit profile"]
+            f0_s1_st0(["Given the user is on the profile page"])
+            f0_s1_st1{{"When the user changes their name"}}
+            f0_s1_st0 --> f0_s1_st1
+            f0_s1_st2["Then the name is updated"]
+            f0_s1_st1 --> f0_s1_st2
+        end
+    end

@@ -1,0 +1,263 @@
+// DecisionGraph schema
+// Edit freely. Validate with `dg validate`.
+
+// ─── Reference resolution rules ──────────────────────────────────────────────
+
+ref-format {
+    string-id pattern="^(ADR|INC|POL|OPP|SPEC)-\\d+$"
+    relative-path pattern="\\.md$"
+}
+
+// ─── Relations ───────────────────────────────────────────────────────────────
+
+relation "supersedes" inverse="superseded_by" cardinality="one" description="Replaces a previous document"
+relation "enables" inverse="enabled_by" cardinality="many" description="Prerequisite — target can exist but can't succeed without source"
+relation "triggers" inverse="triggered_by" cardinality="many" description="Direct cause — target was created specifically because of source"
+relation "depends_on" inverse="dependency_of" cardinality="many" description="Cannot proceed until target is resolved"
+relation "implements" inverse="implemented_by" cardinality="many" description="Technical realization of a policy or opportunity"
+relation "conflicts_with" cardinality="many" description="Contradicts or creates tension with target"
+relation "related" cardinality="many" description="Loosely associated — use a more specific relation when possible"
+
+// ─── ADR: Architecture Decision Record ───────────────────────────────────────
+
+type "adr" description="Architecture Decision Record" folder="docs/architecture" {
+    alias "architecture" "tech"
+    field "status" type="enum" required=#true default="proposed" description="Lifecycle state" {
+        values "proposed" "accepted" "rejected" "deprecated" "superseded"
+        transition "proposed" "accepted" "rejected"
+        transition "accepted" "deprecated" "superseded"
+    }
+    field "author" type="user" required=#true description="Decision author"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "tags" type="string[]"
+    field "code_paths" type="string[]" description="Glob patterns of source code paths related to this decision"
+
+    section "Context" required=#true description="Problem statement and constraints" {
+        content min-paragraphs=1
+    }
+    section "Decision" required=#true description="The decision and rationale" {
+        content min-paragraphs=1
+    }
+    section "Consequences" required=#true {
+        section "Positive" required=#true
+        section "Negative"
+    }
+}
+
+// ─── POL: Policy Document ────────────────────────────────────────────────────
+
+type "pol" description="Policy Document" folder="docs/policies" {
+    alias "policy"
+    field "status" type="enum" required=#true default="proposed" description="Lifecycle state" {
+        values "proposed" "active" "deprecated" "superseded"
+        transition "proposed" "active"
+        transition "active" "deprecated" "superseded"
+    }
+    field "author" type="user" required=#true description="Policy author"
+    field "owner" type="user" description="Current policy owner"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "review_date" type="string" pattern="^\\d{4}-\\d{2}-\\d{2}$" description="Next review date"
+    field "tags" type="string[]"
+    field "code_paths" type="string[]" description="Glob patterns of source code paths related to this policy"
+
+    section "Purpose" required=#true description="Why this policy exists" {
+        content min-paragraphs=1
+    }
+    section "Policy" required=#true description="The policy statement" {
+        content min-paragraphs=1
+    }
+    section "Scope" required=#true description="Who and what this policy applies to"
+    section "Compliance" description="How compliance is measured"
+    section "Roles" description="Roles and responsibilities"
+    section "Enforcement" description="Consequences of non-compliance"
+    section "Review History" {
+        table {
+            column "Date" type="string" required=#true
+            column "Reviewer" type="user" required=#true
+            column "Changes" type="string" required=#true
+        }
+    }
+}
+
+// ─── OPP: Opportunity ────────────────────────────────────────────────────────
+
+type "opp" description="Opportunity" folder="docs/opportunities" {
+    alias "opportunity"
+    field "status" type="enum" required=#true default="identified" description="Discovery phase" {
+        values "identified" "validating" "pursuing" "completed" "deprecated" "declined"
+        transition "identified" "validating" "declined"
+        transition "validating" "pursuing" "declined"
+        transition "pursuing" "completed" "declined"
+        transition "completed" "deprecated"
+    }
+    field "author" type="user" required=#true description="Opportunity author"
+    field "owner" type="user" description="Current opportunity owner"
+    field "priority" type="enum" description="Priority level" {
+        values "critical" "high" "medium" "low"
+    }
+    field "effort" type="enum" description="Estimated effort" {
+        values "small" "medium" "large"
+    }
+    field "impact" type="enum" description="Expected impact" {
+        values "critical" "high" "medium" "low"
+    }
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "tags" type="string[]"
+
+    section "Description" required=#true description="What is the opportunity and why it matters" {
+        content min-paragraphs=1
+    }
+    section "Impact" description="Expected business impact with evidence (revenue, retention, competitive advantage)"
+    section "Success Metrics" description="Measurable KPIs to evaluate if this delivered value" {
+        list min-items=1
+    }
+    section "Non-Goals" description="What is explicitly out of scope to prevent scope creep" {
+        list min-items=1
+    }
+    section "Alternatives Considered" description="Other approaches evaluated and why they were not chosen" {
+        table {
+            column "❓" type="string" required=#true
+            column "Option" type="string" required=#true
+            column "Rationale" type="string" required=#true
+        }
+    }
+    section "Risks" description="Known risks and mitigations that could prevent success"
+    section "Requirements" description="Technical and business requirements for pursuing this opportunity"
+
+    rule "active requires Requirements table" {
+        when "status" equals-any="pursuing,completed"
+        then-section-table "Requirements" {
+            table {
+                column "Status" type="enum" required=#true {
+                    values "completed" "in-progress" "pending"
+                }
+                column "Requirement" type="string" required=#true
+                column "Owner" type="user" required=#true
+            }
+        }
+    }
+}
+
+// ─── INC: Incident Report ────────────────────────────────────────────────────
+
+type "inc" description="Incident Report" folder="docs/incidents" {
+    alias "incident"
+    field "status" type="enum" required=#true default="open" description="Incident state" {
+        values "open" "mitigated" "resolved"
+        transition "open" "mitigated" "resolved"
+        transition "mitigated" "resolved"
+    }
+    field "severity" type="enum" required=#true description="Severity level" {
+        values "sev1" "sev2" "sev3" "sev4"
+    }
+    field "commander" type="user" description="Incident commander"
+    field "responders" type="user[]" description="Incident responders"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "duration" type="string" description="Total incident duration (e.g. 2h 30m, 45m, 3d)"
+    field "tags" type="string[]"
+
+    section "Summary" required=#true description="What happened" {
+        content min-paragraphs=1
+    }
+    section "Timeline" required=#true description="Chronological events" {
+        table {
+            column "Time" type="string" required=#true
+            column "Event" type="string" required=#true
+            column "Actor" type="user"
+        }
+    }
+    section "Root Cause" required=#true description="Root cause analysis"
+    section "Five Whys" description="5-Whys root cause drill-down" {
+        list min-items=1 ordered=#true
+    }
+    section "Action Items" {
+        table {
+            column "Status" type="enum" required=#true {
+                values "completed" "in-progress" "pending"
+            }
+            column "Action" type="string" required=#true
+            column "Owner" type="user" required=#true
+            column "Due Date" type="date"
+        }
+    }
+}
+
+// ─── README: Project overview ────────────────────────────────────────────────
+
+type "readme" folder="." max_count=1 singleton=#true description="Project README" {
+    match "README.md"
+
+    section "Architecture" required=#true description="High-level system diagram (C4, block, etc.)" {
+        diagram required=#true
+    }
+    section "License" required=#true description="License name or proprietary notice" {
+        content min-paragraphs=1
+    }
+}
+
+// ─── Service README: Per-service overview ────────────────────────────────────
+
+type "service-readme" folder="services" singleton=#true description="Service README in monorepo" {
+    match "README.md"
+
+    section "Architecture" required=#true description="Service-level architecture diagram" {
+        diagram required=#true
+    }
+    section "Local Development" required=#true description="Setup, build, test, run instructions" {
+        section "Setup" required=#true description="Environment setup" {
+            content min-paragraphs=1
+        }
+        section "Build" description="Build instructions" {
+            content min-paragraphs=1
+        }
+        section "Test" required=#true description="How to run tests" {
+            content min-paragraphs=1
+        }
+        section "Run" required=#true description="How to run locally" {
+            content min-paragraphs=1
+        }
+    }
+}
+
+type "app-readme" folder="apps" singleton=#true description="App README in monorepo" {
+    match "README.md"
+
+    section "Local Development" required=#true description="Setup, build, test, run instructions" {
+        section "Setup" required=#true description="Environment setup" {
+            content min-paragraphs=1
+        }
+        section "Test" required=#true description="How to run tests" {
+            content min-paragraphs=1
+        }
+        section "Run" required=#true description="How to run locally" {
+            content min-paragraphs=1
+        }
+    }
+}
+
+// ─── SPEC: Behavioral Specification / User Story ────────────────────────────
+
+type "spec" description="Behavioral Specification / User Story" folder="docs/specs" {
+    alias "feature"
+    field "status" type="enum" required=#true default="draft" description="Spec lifecycle" {
+        values "draft" "proposed" "approved" "implemented" "deprecated"
+        transition "draft" "proposed"
+        transition "proposed" "approved"
+        transition "approved" "implemented" "deprecated"
+        transition "implemented" "deprecated"
+    }
+    field "priority" type="enum" description="MoSCoW priority" {
+        values "must" "should" "could"
+    }
+    field "author" type="user" required=#true description="Spec author"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "tags" type="string[]"
+
+    section "Story" required=#true description="User story (As a / I want / So that)" {
+        content min-paragraphs=1
+    }
+    section "Scenarios" required=#true description="Gherkin scenarios in code blocks"
+    section "Acceptance Criteria" description="Non-Gherkin acceptance conditions" {
+        list min-items=1
+    }
+}

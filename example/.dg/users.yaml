@@ -1,0 +1,34 @@
+# DecisionGraph user/team config
+# Handles are used in frontmatter fields with type="user"
+
+users:
+  onni:
+    name: Onni Hakala
+    email: onni@flaky.build
+    teams: [engineering, platform]
+  alice:
+    name: Alice Chen
+    email: alice@example.com
+    teams: [engineering]
+  bob:
+    name: Bob Martinez
+    email: bob@example.com
+    teams: [platform, security]
+  dave:
+    name: Dave Korhonen
+    email: dave@example.com
+    teams: [it-department]
+  eve:
+    name: Eve Virtanen
+    email: eve@example.com
+    teams: [it-department]
+
+teams:
+  engineering:
+    name: Engineering
+  platform:
+    name: Platform
+  security:
+    name: Security
+  it-department:
+    name: IT Department

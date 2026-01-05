@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 164
+expression: "render_latex(r\"\\sqrt{x^2 + y^2}\").unwrap()"
+---
+ _______
+√x² + y²

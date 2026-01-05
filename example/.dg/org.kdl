@@ -1,0 +1,120 @@
+// Example LTD organization structure
+// This defines the company hierarchy, teams, and people
+
+// ─── Organizations ────────────────────────────────────────────────────────
+
+org "example-ltd" {
+    name "Example LTD"
+}
+
+org "example-eu" {
+    name "Example EU GmbH"
+    parent "example-ltd"
+}
+
+// ─── Jira integrations ───────────────────────────────────────────────────
+
+jira "CO" {
+    url "https://example.atlassian.net/browse"
+}
+
+// ─── Teams ────────────────────────────────────────────────────────────────
+
+team "engineering" {
+    name "Engineering"
+    org "example-ltd"
+    lead "alice"
+}
+
+team "platform" {
+    name "Platform Team"
+    org "example-ltd"
+    parent "engineering"
+    lead "bob"
+}
+
+team "product" {
+    name "Product Team"
+    org "example-ltd"
+    lead "carol"
+}
+
+team "security" {
+    name "Security Team"
+    org "example-ltd"
+    parent "engineering"
+    lead "dave"
+}
+
+team "data" {
+    name "Data Team"
+    org "example-eu"
+    parent "engineering"
+    lead "eve"
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────
+
+user "alice" {
+    name "Alice Johnson"
+    title "VP Engineering"
+    email "alice@example.com"
+    teams "engineering"
+    org "example-ltd"
+}
+
+user "bob" {
+    name "Bob Smith"
+    title "Platform Lead"
+    email "bob@example.com"
+    teams "platform" "engineering"
+    org "example-ltd"
+}
+
+user "carol" {
+    name "Carol Davis"
+    title "Head of Product"
+    email "carol@example.com"
+    teams "product"
+    org "example-ltd"
+}
+
+user "dave" {
+    name "Dave Wilson"
+    title "Security Lead"
+    email "dave@example.com"
+    teams "security" "engineering"
+    org "example-ltd"
+}
+
+user "eve" {
+    name "Eve Martinez"
+    title "Data Engineering Lead"
+    email "eve@example.com"
+    teams "data" "engineering"
+    org "example-eu"
+}
+
+user "frank" {
+    name "Frank Chen"
+    title "Senior Engineer"
+    email "frank@example.com"
+    teams "platform"
+    org "example-ltd"
+}
+
+user "grace" {
+    name "Grace Taylor"
+    title "Product Manager"
+    email "grace@example.com"
+    teams "product"
+    org "example-ltd"
+}
+
+user "onni" {
+    name "Onni Example"
+    title "Staff Engineer"
+    email "onni@example.com"
+    teams "platform" "engineering"
+    org "example-ltd"
+}

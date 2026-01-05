@@ -1,0 +1,8 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 27
+expression: "render_markdown_plain(\"- One\\n- Two\\n- Three\")"
+---
+● One
+● Two
+● Three

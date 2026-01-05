@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dg hooks deny-command"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "check-fixme.sh \"$CLAUDE_FILE_PATH\""
+          },
+          {
+            "type": "command",
+            "command": "check-code.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

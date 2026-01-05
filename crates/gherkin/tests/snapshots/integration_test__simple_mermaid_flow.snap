@@ -1,0 +1,21 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+flowchart TD
+    subgraph f0["User Login"]
+        subgraph f0_s0["Successful login"]
+            f0_s0_st0(["Given the user is on the login page"])
+            f0_s0_st1{{"When the user enters valid credentials"}}
+            f0_s0_st0 --> f0_s0_st1
+            f0_s0_st2["Then the user is redirected to dashboard"]
+            f0_s0_st1 --> f0_s0_st2
+        end
+        subgraph f0_s1["Failed login"]
+            f0_s1_st0(["Given the user is on the login page"])
+            f0_s1_st1{{"When the user enters invalid credentials"}}
+            f0_s1_st0 --> f0_s1_st1
+            f0_s1_st2["Then an error message is shown"]
+            f0_s1_st1 --> f0_s1_st2
+        end
+    end

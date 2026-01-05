@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 129
+expression: "render_markdown_plain(\"Press <kbd>Ctrl</kbd>\")"
+---
+Press [Ctrl]

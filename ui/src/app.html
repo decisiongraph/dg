@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>" />
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-prerender="false">
+		<div id="dg-loading" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:white;font-family:system-ui,sans-serif;color:#888">
+			<style>#dg-loading .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#666;margin:0 3px;animation:dg-bounce .6s infinite alternate}#dg-loading .dot:nth-child(2){animation-delay:.2s}#dg-loading .dot:nth-child(3){animation-delay:.4s}@keyframes dg-bounce{to{opacity:.3;transform:translateY(-4px)}}@media(prefers-color-scheme:dark){#dg-loading{background:#09090b;color:#666}#dg-loading .dot{background:#888}}</style>
+			<span class="dot"></span><span class="dot"></span><span class="dot"></span>
+		</div>
+		<div style="display: contents">
+			%sveltekit.body%
+		</div>
+		<script>
+			// Fallback: remove loading indicator after 3s if SvelteKit hasn't mounted
+			setTimeout(() => { const el = document.getElementById('dg-loading'); if (el) el.remove(); }, 3000);
+		</script>
+	</body>
+</html>

@@ -1,0 +1,6 @@
+---
+source: crates/markdown-tui/tests/snapshot_rendering.rs
+assertion_line: 22
+expression: "render_markdown_plain(\"# Hello **bold** and *italic*\")"
+---
+# Hello bold and italic

@@ -1,0 +1,335 @@
+# DecisionGraph
+
+Decision management tool for software teams. Tracks business opportunities, policies, architecture decisions, incidents, and behavioral specs as structured Markdown documents with YAML frontmatter, validated against KDL schemas.
+
+Documents form a dependency graph with forward refs and backlinks, giving teams visibility into why decisions were made, what they affect, and when they go stale.
+
+## Install
+
+```bash
+# Install to ~/.cargo/bin (release build)
+cargo install --path crates/dg-cli
+cargo install --path crates/dg-mcp   # optional: MCP server for AI agents
+
+# Or build release binaries in target/release/
+cargo build --release
+```
+
+## Quick start
+
+```bash
+dg init                              # Scaffold project + git hooks + AI agent config
+dg new opportunity "Sell llama milk online"                  # OPP-001
+dg new adr "Use Rails with PostgreSQL" enables OPP-001       # ADR-001
+dg new spec "Llama milk checkout flow" implements OPP-001    # SPEC-001
+dg new policy "GDPR: Serving European customers" enables OPP-001  # POL-001
+dg validate                          # Check all docs against schema
+dg list                              # List all documents
+dg refs ADR-001                      # Show what ADR-001 references
+dg refs ADR-001 --backlinks          # Show what references ADR-001
+```
+
+Type aliases: `opportunity`→opp, `architecture`/`tech`→adr, `policy`→pol, `incident`→inc, `feature`→spec.
+
+## Document types
+
+| Type | Aliases | Prefix | Folder | Purpose |
+|------|---------|--------|--------|---------|
+| `opp` | `opportunity` | `OPP-001` | `docs/opportunities/` | Business opportunities, features, requirements |
+| `adr` | `architecture`, `tech` | `ADR-001` | `docs/architecture/` | Architecture/technical decisions (MADR 4.0) |
+| `pol` | `policy` | `POL-001` | `docs/policies/` | Policies, constraints, compliance rules |
+| `inc` | `incident` | `INC-001` | `docs/incidents/` | Incidents, post-mortems, root cause analysis |
+| `spec` | `feature` | `SPEC-001` | `docs/specs/` | Behavioral specs with Gherkin scenarios |
+
+## Commands
+
+```bash
+# Create
+dg new <type> "Title" [--field=value] [relation REF-001]
+dg new adr "Use PostgreSQL" --author=@jane enables OPP-001   # field + relation
+
+# Read
+dg list [--type adr] [--status active] [--group-by type]
+dg show OPP-001                      # Rendered output
+dg show OPP-001 --json               # Full JSON (frontmatter + sections)
+dg show OPP-001 --raw                # Raw markdown source
+dg refs OPP-001                      # Outgoing references
+dg refs OPP-001 --backlinks          # Incoming references
+dg search "query"                    # Full-text search across all docs
+dg search "query" --section "Root Cause" --type inc
+
+# Update
+dg set OPP-001 status=completed date=2026-01-15   # Multiple fields at once
+dg set OPP-001 tags+=backend                      # Append to array field
+dg set OPP-001 --section Decision --content "New text"
+dg set OPP-001 --section Decision --content-file notes.md  # Read from file
+dg set OPP-001 --section Timeline --add-row "10:30,Restored,@ops"
+dg set OPP-001 --remove tags                      # Remove a field
+
+# Validate & lint
+dg validate                          # Schema validation (errors + warnings)
+dg validate --skip C002              # Suppress specific diagnostic codes
+dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
+dg suggest                           # Advisory improvement suggestions
+
+# Inspect schema
+dg schema                            # List all types and relations
+dg schema adr                        # Fields, sections, rules for a type
+dg schema --json                     # Machine-readable output
+
+# History & diff
+dg diff ADR-001                      # Field/section changes vs HEAD
+dg diff ADR-001 --commit abc1234     # Compare against specific commit
+dg history ADR-001                   # Status transitions from git history
+
+# Export & diagrams
+dg export --features -o ./features                # Extract .feature files
+dg export --features --check -o ./features        # Validate + extract
+dg export --features --diagram mermaid -o ./out   # Generate Mermaid diagrams
+dg site -o ./site                                 # Static HTML documentation site
+
+# Maintenance
+dg fmt                               # Auto-format documents to schema order
+dg renumber                          # Reorder document IDs chronologically
+dg coverage                          # Coverage metrics by type/status
+dg team list                         # Show orgs, teams, users
+```
+
+## Field assignment rules
+
+`dg set` and `dg new` use `=` to set scalar fields and `+=` to append to arrays:
+
+| Operator | Use for | Example |
+|----------|---------|---------|
+| `key=value` | Scalar fields and single-ref relations | `status=accepted`, `supersedes=ADR-001` |
+| `key+=value` | Array fields and multi-ref relations | `tags+=backend`, `implements+=OPP-001` |
+
+**Single-ref relations** (`=`): `supersedes`, `superseded_by`, `enables`, `enabled_by`, `triggers`, `triggered_by`
+
+**Multi-ref relations** (`+=`): `implements`, `depends_on`, `related`, `conflicts_with`
+
+`dg set` warns when you use `+=` on a scalar field.
+
+## Relations
+
+Documents link to each other via frontmatter relations:
+
+```yaml
+implements:
+  - OPP-001
+supersedes: ADR-002
+```
+
+| Relation | Inverse | Cardinality | Description |
+|----------|---------|-------------|-------------|
+| `supersedes` | `superseded_by` | one | Replaces a previous document |
+| `enables` | `enabled_by` | many | Prerequisite — source must exist for target to succeed |
+| `triggers` | `triggered_by` | many | Direct cause — target was created because of source |
+| `depends_on` | `dependency_of` | many | Cannot proceed until target is resolved |
+| `implements` | `implemented_by` | many | Technical realization of a policy or opportunity |
+| `conflicts_with` | — | many | Contradicts or creates tension with target |
+| `related` | — | many | Loose association (use a more specific relation when possible) |
+
+`dg lint` checks for dangling refs, cycles, and orphaned documents.
+
+## Configuration files
+
+`dg init` creates a `.dg/` directory with two KDL configuration files.
+
+### `.dg/schema.kdl` — Document schema
+
+Defines document types, fields, sections, and validation rules. By default the built-in schema is used. Run `dg init --eject` to copy the built-in schema to `.dg/schema.kdl` for customization.
+
+```kdl
+// Define a custom document type
+type "rfc" description="Request for Comments" folder="docs/rfcs" {
+    alias "proposal"
+    field "status" type="enum" required=#true default="draft" {
+        values "draft" "review" "accepted" "rejected"
+        transition "draft" "review"
+        transition "review" "accepted" "rejected"
+    }
+    field "author" type="user" required=#true
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$"
+    field "tags" type="string[]"
+
+    section "Motivation" required=#true { content min-paragraphs=1 }
+    section "Design" required=#true { content min-paragraphs=1 }
+    section "Drawbacks"
+    section "Alternatives"
+}
+
+// Define custom relations
+relation "replaces" inverse="replaced_by" cardinality="one"
+
+// Configure valid ID formats (used by dg validate for ref checking)
+ref-format {
+    string-id pattern="^(ADR|INC|POL|OPP|SPEC|RFC)-\\d+$"
+    relative-path pattern="\\.md$"
+}
+```
+
+Field types: `string`, `string[]`, `enum`, `user`, `user[]`, `date`.
+
+Section constraints: `content min-paragraphs=N`, `list min-items=N`, `diagram required=#true`, `table { column ... }`.
+
+Conditional rules enforce extra requirements based on field values:
+
+```kdl
+rule "active OPPs require a Requirements table" {
+    when "status" equals-any="pursuing,completed"
+    then-section-table "Requirements" {
+        table {
+            column "Status" type="enum" required=#true { values "completed" "in-progress" "pending" }
+            column "Requirement" type="string" required=#true
+            column "Owner" type="user" required=#true
+        }
+    }
+}
+```
+
+Use `dg schema [TYPE]` to inspect the active schema without opening the file.
+
+### `.dg/org.kdl` — Team and user registry
+
+Defines people, teams, and legal entities referenced in `author`, `owner`, `responders`, and other user-typed fields. User handles appear as `@handle` in documents and table cells.
+
+```kdl
+org "acme-corp" {
+    name "Acme Corporation"
+}
+
+org "acme-eu" {
+    name "Acme EU GmbH"
+    parent "acme-corp"
+}
+
+team "engineering" {
+    name "Engineering"
+    org "acme-corp"
+    lead "jane"
+}
+
+team "platform" {
+    name "Platform Team"
+    org "acme-eu"
+    parent "engineering"     // sub-team
+    lead "onni"
+}
+
+team "vendors" {
+    name "External Contractors"
+    kind "external"
+    org "acme-corp"
+}
+
+user "jane" {
+    name "Jane Smith"
+    title "VP Engineering"
+    email "jane@acme.com"
+    teams "engineering"
+    org "acme-corp"
+}
+
+user "ext-dev" {
+    name "External Dev"
+    kind "external"          // marks as external contributor
+    teams "vendors"
+    org "acme-corp"
+}
+
+user "former-alice" {
+    name "Alice Former"
+    status "departed"        // excluded from active user validation
+}
+```
+
+Manage via `dg team` commands:
+
+```bash
+dg team list                                         # Show all orgs, teams, users
+dg team add-user jane --name="Jane Smith" --teams=engineering
+dg team add-team vendors --kind=external
+dg team depart-user former-alice                     # Mark as departed
+```
+
+Reference users in documents with their handle (without `@`):
+
+```yaml
+author: jane
+owner: team/platform
+responders:
+  - jane
+  - ext-dev
+```
+
+`dg validate` checks that all user references resolve against `org.kdl`.
+
+## Gherkin support
+
+SPEC documents contain Gherkin scenarios in fenced code blocks:
+
+````markdown
+```gherkin
+Feature: Checkout
+
+  Scenario: Successful purchase
+    Given the cart has items
+    When the user submits payment
+    Then an order confirmation is sent
+```
+````
+
+`dg validate` checks Gherkin syntax (G001) and semantics (G002: missing Then steps, duplicate names, empty scenarios).
+
+`dg export --features` extracts scenarios to standalone `.feature` files. Add `--diagram mermaid` or `--diagram d2` to generate flow diagrams.
+
+## AI agent integration
+
+`dg init` auto-detects installed AI CLIs and sets up workflow instructions and skills:
+
+```bash
+dg init                    # Auto-detect claude/gemini/opencode in PATH
+dg init --with-claude      # Force Claude Code setup (CLAUDE.md + .claude/skills/)
+dg init --with-gemini      # Force Gemini CLI setup (AGENTS.md + .gemini/skills/)
+dg init --with-opencode    # Force OpenCode setup   (AGENTS.md + .opencode/skills/)
+dg init --eject            # Export all templates to .dg/templates/ for customization
+```
+
+Skills installed cover: opportunity, ADR, policy, incident, spec, diagram, team, image, Mermaid flowchart, Mermaid sequence.
+
+The MCP server (`dg-mcp`) exposes JSON-RPC tools over stdio for direct agent integration without the CLI: `dg-validate`, `dg-get`, `dg-list`, `dg-inspect`, `dg-describe`, `dg-set`, `dg-new`, `dg-refs`, `dg-graph`, `dg-check-code`, `dg-deprecate`.
+
+## Project structure
+
+After `dg init`:
+
+```
+.dg/
+  org.kdl          # Team/user registry
+  schema.kdl       # Custom schema (only if ejected with dg init --eject)
+docs/
+  architecture/    # ADR-001.md, ADR-002.md, ...
+  opportunities/   # OPP-001.md, ...
+  policies/        # POL-001.md, ...
+  incidents/       # INC-001.md, ...
+  specs/           # SPEC-001.md, ...
+  assets/          # Images referenced in docs (validated by dg validate)
+CLAUDE.md          # AI agent instructions (auto-generated)
+```
+
+## Workspace crates
+
+| Crate | Description |
+|-------|-------------|
+| `crates/dg-cli` | CLI binary (`dg`) |
+| `crates/md-db` | Core library: parsing, validation, graph, search, diff, export, site generation |
+| `crates/dg-schemas` | Built-in KDL schema, org template, AI agent templates |
+| `crates/gherkin` | Gherkin parsing, semantic validation, diagram generation |
+| `crates/dg-mcp` | MCP server for AI agents (JSON-RPC over stdio) |
+| `crates/markdown-tui` | Terminal markdown renderer (GFM → ANSI / ratatui widgets) |
+| `cc-eval/` | Claude Code evaluation runner (standalone, not in workspace) |
+
+## License
+
+AGPL-3.0-or-later

@@ -1,0 +1,69 @@
+# Rust
+/target
+Cargo.lock
+
+# Do not include the generated code from Claude Code eval tests
+cc-eval/target
+cc-eval/evals/
+cc-eval/cc-eval/evals/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# Decision Graph Generated
+docs/.index.json
+
+# Static assets (auto-downloaded by devenv.nix)
+src/serve/static/tailwindcss
+src/serve/static/daisyui.mjs
+src/serve/static/daisyui-theme.mjs
+src/serve/static/fonts/
+
+# Generated static site
+/site/
+/example/site/
+/example-site/
+
+# UI build artifacts & deps
+ui/node_modules/
+ui/build/
+ui/.svelte-kit/
+ui/.vite/
+
+# Cargo config (local overrides)
+.cargo/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Dev screenshots
+*.png
+
+# Personal test/research dirs
+onni-tests/
+samille-test/
+research/
+rust-disk-space.md
+
+# Claude
+.claude/settings.json
+.mcp.json
+.claude

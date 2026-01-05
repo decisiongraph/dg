@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 73
+expression: "render_markdown_plain(\"Use `code` in text\")"
+---
+Use `code` in text

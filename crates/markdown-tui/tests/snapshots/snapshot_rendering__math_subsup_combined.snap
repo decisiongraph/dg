@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 154
+expression: "render_latex(\"x_1^2\").unwrap()"
+---
+x
+ 1²

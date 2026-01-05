@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 103
+expression: "render_markdown_plain(\"**bold** *italic* ~~strike~~\")"
+---
+bold italic strike

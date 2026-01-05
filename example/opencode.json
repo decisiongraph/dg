@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "tool.execute.after": [
+      {
+        "pattern": "^(Edit|WriteFile)$",
+        "command": ".opencode/hooks/check-fixme.sh"
+      },
+      {
+        "pattern": "^(Edit|WriteFile)$",
+        "command": ".opencode/hooks/check-code.sh"
+      }
+    ]
+  }
+}

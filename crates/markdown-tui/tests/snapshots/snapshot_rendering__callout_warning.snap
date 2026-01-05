@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 88
+expression: "render_markdown_plain(\"> [!WARNING]\\n> Be careful\")"
+---
+│ ⚠ WARNING
+│ Be careful

@@ -1,0 +1,32 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+flowchart TD
+    subgraph f0["Payment Processing"]
+        subgraph f0_r0["Rule: Credit card payments"]
+            subgraph f0_r0_s0["Successful charge"]
+                f0_r0_s0_st0(["Given a valid credit card"])
+                f0_r0_s0_st1{{"When the user submits payment"}}
+                f0_r0_s0_st0 --> f0_r0_s0_st1
+                f0_r0_s0_st2["Then the payment is processed"]
+                f0_r0_s0_st1 --> f0_r0_s0_st2
+            end
+            subgraph f0_r0_s1["Declined card"]
+                f0_r0_s1_st0(["Given an expired credit card"])
+                f0_r0_s1_st1{{"When the user submits payment"}}
+                f0_r0_s1_st0 --> f0_r0_s1_st1
+                f0_r0_s1_st2["Then the payment is declined"]
+                f0_r0_s1_st1 --> f0_r0_s1_st2
+            end
+        end
+        subgraph f0_r1["Rule: Gift card payments"]
+            subgraph f0_r1_s0["Full balance"]
+                f0_r1_s0_st0(["Given a gift card with sufficient balance"])
+                f0_r1_s0_st1{{"When the user submits payment"}}
+                f0_r1_s0_st0 --> f0_r1_s0_st1
+                f0_r1_s0_st2["Then the payment is processed"]
+                f0_r1_s0_st1 --> f0_r1_s0_st2
+            end
+        end
+    end

@@ -1,0 +1,7 @@
+# DecisionGraph build artifacts
+.dg/site/
+.dg/.cache.json
+.dg/cache/
+
+# Nested service git repos (for per-service onefetch)
+services/*/.git

@@ -1,0 +1,7 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 122
+expression: "render_markdown_plain(\"<details><summary>Title</summary>Body content</details>\")"
+---
+▼ Title
+  Body content

@@ -1,0 +1,10 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+flowchart LR
+    f0["User Login"]
+    f0_s0(["Successful login"])
+    f0 --> f0_s0
+    f0_s1(["Failed login"])
+    f0 --> f0_s1

@@ -1,0 +1,32 @@
+// cc-eval Scenario Schema
+// Validates scenario markdown files before running evals.
+// Run: cargo run -- validate
+
+// ─── Reference resolution rules ──────────────────────────────────────────────
+
+ref-format {
+    string-id pattern="^[a-z0-9-]+$"
+}
+
+// ─── SCENARIO: Eval Scenario Configuration ───────────────────────────────────
+
+type "scenario" description="Eval scenario configuration" folder="." {
+    field "name" type="string" required=#true pattern="^[a-z0-9-]+$" description="Unique scenario identifier"
+    field "mode" type="enum" required=#true default="non_interactive" description="Execution mode" {
+        values "interactive" "non_interactive"
+    }
+    field "prompt" type="string" required=#true description="User prompt to test"
+    field "max_turns" type="number" default=15 description="Maximum conversation turns"
+    field "model" type="string" default="claude-sonnet-4-20250514" description="Model to use"
+
+    // Optional sections
+    section "Answerer Context" description="Domain context for LLM answerer (interactive mode)" {
+        content min-paragraphs=1
+    }
+    section "Judge: Question Quality" required=#true description="Judge prompt for question quality" {
+        content min-paragraphs=1
+    }
+    section "Judge: Document Quality" required=#true description="Judge prompt for document quality" {
+        content min-paragraphs=1
+    }
+}

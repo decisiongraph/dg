@@ -1,0 +1,16 @@
+---
+source: tests/integration_test.rs
+expression: output
+---
+flowchart LR
+    f0["E-Commerce"]
+    f0_s0(["Browse products"])
+    f0 --> f0_s0
+    f0_s1(["Search products"])
+    f0 --> f0_s1
+    f0_s2(["Add to cart"])
+    f0 --> f0_s2
+    f0_s3(["Checkout"])
+    f0 --> f0_s3
+    f0_s4(["Order tracking"])
+    f0 --> f0_s4

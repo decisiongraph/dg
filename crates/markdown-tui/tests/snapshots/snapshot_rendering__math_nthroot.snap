@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 169
+expression: "render_latex(r\"\\sqrt[3]{x}\").unwrap()"
+---
+³√x

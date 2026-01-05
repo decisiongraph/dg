@@ -1,0 +1,8 @@
+[package]
+name = "dg-schemas"
+version = "0.1.0"
+edition = "2021"
+description = "Built-in KDL schemas for DecisionGraph document types (OPP/POL/ADR/INC)"
+
+[dev-dependencies]
+md-db = { workspace = true }

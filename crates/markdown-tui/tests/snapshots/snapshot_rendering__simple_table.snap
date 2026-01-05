@@ -1,0 +1,11 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 49
+expression: "render_markdown_plain(\"| Name | Age |\\n|------|-----|\\n| Alice | 30 |\\n| Bob | 25 |\")"
+---
+┌───────┬─────┐
+│ Name  │ Age │
+├───────┼─────┤
+│ Alice │ 30  │
+│ Bob   │ 25  │
+└───────┴─────┘

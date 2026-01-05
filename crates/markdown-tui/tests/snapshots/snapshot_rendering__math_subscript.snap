@@ -1,0 +1,6 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 149
+expression: "render_latex(\"x_1\").unwrap()"
+---
+x₁

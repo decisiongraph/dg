@@ -1,0 +1,8 @@
+---
+source: tests/snapshot_rendering.rs
+assertion_line: 37
+expression: "render_markdown_plain(\"- Parent\\n  - Child\\n    - Grandchild\")"
+---
+● Parent
+  ○ Child
+    ▪ Grandchild
