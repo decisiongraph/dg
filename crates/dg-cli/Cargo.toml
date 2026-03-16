@@ -19,7 +19,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 comrak = { version = "0.36", default-features = false }
 crossterm = "0.28"
-git2 = { version = "0.19", features = ["vendored"] }
+git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
 regex = "1"
 tiny_http = "0.12"
 notify = "7"
