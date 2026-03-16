@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            use_cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux' && !matrix.use_cross
+        run: sudo apt-get install -y cmake libssl-dev pkg-config
+
+      - name: Install Perl (Windows, for OpenSSL vendored build)
+        if: runner.os == 'Windows'
+        uses: shogo82148/actions-setup-perl@v1
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+
+      - name: Build (cargo)
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          TARGET=${{ matrix.target }}
+          OUTDIR="dist/${TARGET}"
+          mkdir -p "${OUTDIR}"
+          cp "target/${TARGET}/release/dg" "${OUTDIR}/"
+          cp "target/${TARGET}/release/dg-mcp" "${OUTDIR}/"
+          tar -czf "dist/dg-${TARGET}.tar.gz" -C "dist" "${TARGET}"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          TARGET=${{ matrix.target }}
+          OUTDIR="dist/${TARGET}"
+          mkdir -p "${OUTDIR}"
+          cp "target/${TARGET}/release/dg.exe" "${OUTDIR}/"
+          cp "target/${TARGET}/release/dg-mcp.exe" "${OUTDIR}/"
+          cd dist
+          7z a "dg-${TARGET}.zip" "${TARGET}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dg-${{ matrix.target }}
+          path: dist/dg-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
