@@ -747,7 +747,7 @@ status: exploring
         let dir = std::env::temp_dir().join("dg_fmt_test_bad_yaml");
         std::fs::create_dir_all(&dir).ok();
         let path = dir.join("test.md");
-        let original = "---\nresponders: [@mikko]\ntype: test\n---\n\n# Body\n";
+        let original = "---\nresponders: [@onni]\ntype: test\n---\n\n# Body\n";
         std::fs::write(&path, original).unwrap();
 
         let schema = test_schema();

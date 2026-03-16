@@ -164,7 +164,7 @@ pub fn validate_document(
         }
     }
 
-    // Validate filename has slug (e.g. opp-001.md is invalid, must be opp-001-digital-bank.md)
+    // Validate filename has slug (e.g. opp-001.md is invalid, must be opp-001-sell-llama-milk.md)
     if let Some(ref doc_path) = doc.path {
         let stem = doc_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let doc_id = crate::graph::path_to_id(doc_path);

@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_at_prefixed_value_returns_error() {
-        let content = "---\nresponders: [@mikko]\n---\nbody";
+        let content = "---\nresponders: [@onni]\n---\nbody";
         let result = Frontmatter::parse(content);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
@@ -587,10 +587,10 @@ mod tests {
 
     #[test]
     fn test_quoted_at_value_parses_correctly() {
-        let content = "---\nresponders:\n  - \"@mikko\"\n---\nbody";
+        let content = "---\nresponders:\n  - \"@onni\"\n---\nbody";
         let (fm, _) = Frontmatter::parse(content).unwrap();
         let val = fm.get_display("responders").unwrap();
-        assert!(val.contains("@mikko"));
+        assert!(val.contains("@onni"));
     }
 
     #[test]
