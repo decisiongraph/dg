@@ -362,7 +362,7 @@ pub struct SchemaFieldJson {
 
 // ── Type map ───────────────────────────────────────────────────────────
 
-const TYPE_MAP: &[(&str, &str, &str)] = &[
+pub(crate) const TYPE_MAP: &[(&str, &str, &str)] = &[
     ("adr", "architecture", "Architecture"),
     ("opp", "opportunities", "Opportunities"),
     ("pol", "policies", "Policies"),
