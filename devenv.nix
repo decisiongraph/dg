@@ -42,9 +42,6 @@ let
     echo "All checks passed." >&2
   '';
 
-  # Stable path for the stop hook symlink. .claude/settings.json is written
-  # once with this path so it never goes stale when devenv.nix changes.
-  claudeStopHookLink = "${toString ./.}/.devenv/claude-stop-hook";
 in
 
 {
@@ -280,9 +277,11 @@ in
       enable = true;
       name = "Verify build, types, tests, and clean git";
       hookType = "Stop";
-      # Use stable symlink path — never changes even when devenv.nix changes.
-      # The symlink is kept current by enterShell (see below).
-      command = claudeStopHookLink;
+      # Use a runtime shell expression so settings.json never goes stale.
+      # toString ./.  gives the Nix store source path (wrong); git/DEVENV_ROOT
+      # gives the real checkout at runtime (correct).
+      # enterShell keeps the .devenv/claude-stop-hook symlink current.
+      command = "sh -c 'ROOT=\"\${DEVENV_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; exec \"$ROOT/.devenv/claude-stop-hook\"'";
     };
   };
 
@@ -298,11 +297,11 @@ in
 
   # Shell hook
   enterShell = ''
-    # Keep the stable stop hook symlink pointing at the current Nix derivation.
-    # This ensures .claude/settings.json (which references the stable path) never
-    # breaks when devenv.nix changes and the Nix store hash rotates.
-    mkdir -p "$(dirname "${claudeStopHookLink}")"
-    ln -sf "${claudeStopHook}" "${claudeStopHookLink}"
+    # Keep the stop hook symlink pointing at the current Nix derivation.
+    # The command in settings.json resolves $DEVENV_ROOT at runtime and
+    # executes this symlink, so it always finds the latest hook script.
+    mkdir -p "$DEVENV_ROOT/.devenv"
+    ln -sf "${claudeStopHook}" "$DEVENV_ROOT/.devenv/claude-stop-hook"
 
     # Remind to build if dg doesn't exist
     if [ ! -x "$DEVENV_ROOT/target/release/dg" ] && [ ! -x "$DEVENV_ROOT/target/debug/dg" ]; then
