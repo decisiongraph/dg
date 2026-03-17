@@ -240,8 +240,12 @@
         D=$(mktemp -d)
         trap 'rm -rf "$D"' EXIT
 
-        # All 3 checks run in parallel (release build and test use different profiles)
-        (cargo build --release >"$D/build.log" 2>&1 || echo "FAIL" > "$D/build") &
+        # Build release binary first (synchronous) so target/release/dg is always up to date
+        if ! cargo build --release >"$D/build.log" 2>&1; then
+          echo "FAIL" > "$D/build"
+        fi
+
+        # Tests and UI checks run in parallel (use different profiles, safe to overlap)
         (cargo test >"$D/test.log" 2>&1 || echo "FAIL" > "$D/test") &
         if [ -d "$ROOT/ui" ]; then
           (cd "$ROOT/ui" && bun run check >"$D/svelte.log" 2>&1 || echo "FAIL" > "$D/svelte") &
