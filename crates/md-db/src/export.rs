@@ -62,6 +62,7 @@ pub fn render_markdown_to_html(body: &str) -> String {
     opts.extension.strikethrough = true;
     opts.extension.autolink = true;
     opts.extension.footnotes = true;
+    opts.extension.alerts = true;
     opts.render.unsafe_ = false;
     let root = comrak::parse_document(&arena, &body, &opts);
     let mut html = Vec::new();
@@ -211,6 +212,21 @@ h1 { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 
 .prose pre { background: #0f172a; padding: 1.25rem; border-radius: 8px; overflow-x: auto; margin: 1.5rem 0; box-shadow: var(--shadow-sm); }
 .prose pre code { background: transparent; border: none; color: #f8fafc; padding: 0; font-size: 0.85rem; line-height: 1.7; }
 .prose blockquote { border-left: 3px solid var(--c-border); padding-left: 1rem; font-style: italic; color: var(--c-text-secondary); margin: 1.5rem 0; }
+.prose .markdown-alert { border-left: 4px solid; padding: 0.75rem 1rem; margin: 1.5rem 0; border-radius: 0 6px 6px 0; font-style: normal; color: var(--c-text); }
+.prose .markdown-alert > :first-child { margin-top: 0; }
+.prose .markdown-alert > :last-child { margin-bottom: 0; }
+.prose .markdown-alert-title { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; font-size: 0.9375rem; }
+.prose .markdown-alert-title svg { width: 1em; height: 1em; flex-shrink: 0; }
+.prose .markdown-alert-note { border-color: #2563eb; background: #eff6ff; }
+.prose .markdown-alert-note .markdown-alert-title { color: #1d4ed8; }
+.prose .markdown-alert-tip { border-color: #16a34a; background: #f0fdf4; }
+.prose .markdown-alert-tip .markdown-alert-title { color: #15803d; }
+.prose .markdown-alert-important { border-color: #7c3aed; background: #f5f3ff; }
+.prose .markdown-alert-important .markdown-alert-title { color: #6d28d9; }
+.prose .markdown-alert-warning { border-color: #d97706; background: #fffbeb; }
+.prose .markdown-alert-warning .markdown-alert-title { color: #b45309; }
+.prose .markdown-alert-caution { border-color: #dc2626; background: #fef2f2; }
+.prose .markdown-alert-caution .markdown-alert-title { color: #b91c1c; }
 .prose a { color: var(--c-primary); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: border 0.1s; }
 .prose a:hover { border-bottom-color: var(--c-primary); }
 .prose table { border-collapse: collapse; width: 100%; margin: 2rem 0; font-size: 0.95rem; }
@@ -1461,6 +1477,17 @@ mod tests {
             !html.contains("<script>alert(1)</script>"),
             "raw XSS payload must be escaped in backlinks"
         );
+    }
+
+    #[test]
+    fn test_gfm_alerts_rendered() {
+        let md = "> [!CAUTION]\n> Do not delete the database.\n";
+        let html = render_markdown_to_html(md);
+        assert!(
+            html.contains("markdown-alert-caution"),
+            "GFM caution alert must render, got: {html}"
+        );
+        assert!(html.contains("Do not delete the database."));
     }
 
     #[test]
