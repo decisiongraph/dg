@@ -177,3 +177,30 @@ type "inc" description="Incident Report" folder="docs/incidents" {
         }
     }
 }
+
+// ─── SPEC: Behavioral Specification / User Story ────────────────────────────
+
+type "spec" description="Behavioral Specification / User Story" folder="docs/specs" {
+    alias "feature"
+    field "status" type="enum" required=#true default="draft" description="Spec lifecycle" {
+        values "draft" "proposed" "approved" "implemented" "deprecated"
+        transition "draft" "proposed"
+        transition "proposed" "approved"
+        transition "approved" "implemented" "deprecated"
+        transition "implemented" "deprecated"
+    }
+    field "priority" type="enum" description="MoSCoW priority" {
+        values "must" "should" "could"
+    }
+    field "author" type="user" required=#true description="Spec author"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "tags" type="string[]"
+
+    section "Story" required=#true description="User story (As a / I want / So that)" {
+        content min-paragraphs=1
+    }
+    section "Scenarios" required=#true description="Gherkin scenarios in code blocks"
+    section "Acceptance Criteria" description="Non-Gherkin acceptance conditions" {
+        list min-items=1
+    }
+}
