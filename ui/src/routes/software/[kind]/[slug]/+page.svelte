@@ -293,25 +293,6 @@
 					</Card.Content>
 				</Card.Root>
 
-				{#if service.dev_commands}
-					<Card.Root>
-						<Card.Header class="pb-2">
-							<Card.Title
-								class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-								>Local Development</Card.Title
-							>
-						</Card.Header>
-						<Card.Content class="space-y-3">
-							{#each Object.entries(service.dev_commands).filter(([, v]) => v) as [label, cmd] (label)}
-								<div>
-									<span class="text-xs font-medium text-muted-foreground uppercase">{label}</span>
-									<pre class="mt-1 rounded bg-muted px-3 py-2 text-xs overflow-x-auto"><code>{cmd}</code></pre>
-								</div>
-							{/each}
-						</Card.Content>
-					</Card.Root>
-				{/if}
-
 			{#if service.lines_of_code || service.dependencies_count || service.repo_size || service.language_version || service.created_at || service.commit_count}
 					<Card.Root>
 						<Card.Header class="pb-2">
