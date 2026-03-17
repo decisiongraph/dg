@@ -71,7 +71,7 @@ pub fn copy_avatars_to_output(
         if cached.exists() {
             let dest = out_avatars.join(format!("{handle}.jpg"));
             std::fs::copy(&cached, &dest)?;
-            map.insert(handle.clone(), format!("data/avatars/{handle}.jpg"));
+            map.insert(handle.clone(), format!("/data/avatars/{handle}.jpg"));
         }
     }
 
