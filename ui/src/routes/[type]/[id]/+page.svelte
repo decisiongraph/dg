@@ -290,6 +290,16 @@
 			{/if}
 		</div>
 
+		<!-- Proposed banner -->
+		{#if doc.status === 'proposed' || doc.status === 'draft'}
+			<div class="mb-6 rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 px-4 py-3">
+				<div class="flex items-start gap-2">
+					<span class="mt-0.5 text-lg leading-none">⚠</span>
+					<p class="font-semibold text-foreground">This document has not been approved yet — it is still a proposal</p>
+				</div>
+			</div>
+		{/if}
+
 		<!-- Superseded / Deprecated banner -->
 		{#if doc.status === 'superseded' || doc.status === 'deprecated'}
 			{@const supersededBy = doc.links?.superseded_by?.filter(Boolean) ?? []}
