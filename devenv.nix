@@ -1,5 +1,52 @@
 { pkgs, lib, ... }:
 
+let
+  # The stop hook script as a Nix derivation. Its store path changes whenever
+  # the content changes, which would break .claude/settings.json if referenced
+  # directly. Instead we write a stable symlink in enterShell (see below).
+  claudeStopHook = pkgs.writeShellScript "claude-stop-hook" ''
+    set -eo pipefail
+    ROOT="''${DEVENV_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+    cd "$ROOT"
+    D=$(mktemp -d)
+    trap 'rm -rf "$D"' EXIT
+
+    # Build release binary first (synchronous) so target/release/dg is always up to date
+    if cargo build --release >"$D/build.log" 2>&1; then
+      # Keep ~/.local/bin/dg in sync so hooks work outside devenv shell
+      [ -d "$HOME/.local/bin" ] && cp "$ROOT/target/release/dg" "$HOME/.local/bin/dg" || true
+    else
+      echo "FAIL" > "$D/build"
+    fi
+
+    # Tests and UI checks run in parallel (use different profiles, safe to overlap)
+    (cargo test >"$D/test.log" 2>&1 || echo "FAIL" > "$D/test") &
+    if [ -d "$ROOT/ui" ]; then
+      (cd "$ROOT/ui" && bun run check >"$D/svelte.log" 2>&1 || echo "FAIL" > "$D/svelte") &
+    fi
+    wait
+
+    # Collect errors — only show last 5 lines of each failure
+    E=""
+    [ -f "$D/build" ] && E="$E\n- cargo build --release failed:\n$(grep -E '^error' "$D/build.log" | head -5)"
+    [ -f "$D/svelte" ] && E="$E\n- svelte-check failed:\n$(grep 'ERROR' "$D/svelte.log" | head -5)"
+    [ -f "$D/test" ] && E="$E\n- cargo test failed:\n$(grep -E '^(error|test .* FAILED|FAILED)' "$D/test.log" | head -5)"
+    [ -n "$(git status --porcelain)" ] && E="$E\n- Uncommitted files exist. Please commit your changes."
+
+    if [ -n "$E" ]; then
+      echo -e "Stop hook found issues:\n$E" >&2
+      echo "" >&2
+      echo "Please fix these issues and try again." >&2
+      exit 2
+    fi
+    echo "All checks passed." >&2
+  '';
+
+  # Stable path for the stop hook symlink. .claude/settings.json is written
+  # once with this path so it never goes stale when devenv.nix changes.
+  claudeStopHookLink = "${toString ./.}/.devenv/claude-stop-hook";
+in
+
 {
   # Enable Rust toolchain (uses nixpkgs default)
   languages.rust.enable = true;
@@ -233,43 +280,9 @@
       enable = true;
       name = "Verify build, types, tests, and clean git";
       hookType = "Stop";
-      command = toString (pkgs.writeShellScript "claude-stop-hook" ''
-        set -eo pipefail
-        ROOT="''${DEVENV_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
-        cd "$ROOT"
-        D=$(mktemp -d)
-        trap 'rm -rf "$D"' EXIT
-
-        # Build release binary first (synchronous) so target/release/dg is always up to date
-        if cargo build --release >"$D/build.log" 2>&1; then
-          # Keep ~/.local/bin/dg in sync so hooks work outside devenv shell
-          [ -d "$HOME/.local/bin" ] && cp "$ROOT/target/release/dg" "$HOME/.local/bin/dg" || true
-        else
-          echo "FAIL" > "$D/build"
-        fi
-
-        # Tests and UI checks run in parallel (use different profiles, safe to overlap)
-        (cargo test >"$D/test.log" 2>&1 || echo "FAIL" > "$D/test") &
-        if [ -d "$ROOT/ui" ]; then
-          (cd "$ROOT/ui" && bun run check >"$D/svelte.log" 2>&1 || echo "FAIL" > "$D/svelte") &
-        fi
-        wait
-
-        # Collect errors — only show last 5 lines of each failure
-        E=""
-        [ -f "$D/build" ] && E="$E\n- cargo build --release failed:\n$(grep -E '^error' "$D/build.log" | head -5)"
-        [ -f "$D/svelte" ] && E="$E\n- svelte-check failed:\n$(grep 'ERROR' "$D/svelte.log" | head -5)"
-        [ -f "$D/test" ] && E="$E\n- cargo test failed:\n$(grep -E '^(error|test .* FAILED|FAILED)' "$D/test.log" | head -5)"
-        [ -n "$(git status --porcelain)" ] && E="$E\n- Uncommitted files exist. Please commit your changes."
-
-        if [ -n "$E" ]; then
-          echo -e "Stop hook found issues:\n$E" >&2
-          echo "" >&2
-          echo "Please fix these issues and try again." >&2
-          exit 2
-        fi
-        echo "All checks passed." >&2
-      '');
+      # Use stable symlink path — never changes even when devenv.nix changes.
+      # The symlink is kept current by enterShell (see below).
+      command = claudeStopHookLink;
     };
   };
 
@@ -285,6 +298,12 @@
 
   # Shell hook
   enterShell = ''
+    # Keep the stable stop hook symlink pointing at the current Nix derivation.
+    # This ensures .claude/settings.json (which references the stable path) never
+    # breaks when devenv.nix changes and the Nix store hash rotates.
+    mkdir -p "$(dirname "${claudeStopHookLink}")"
+    ln -sf "${claudeStopHook}" "${claudeStopHookLink}"
+
     # Remind to build if dg doesn't exist
     if [ ! -x "$DEVENV_ROOT/target/release/dg" ] && [ ! -x "$DEVENV_ROOT/target/debug/dg" ]; then
       echo ""
