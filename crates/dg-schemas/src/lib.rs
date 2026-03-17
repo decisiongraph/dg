@@ -348,7 +348,11 @@ pub fn resolve_template(templates_dir: &std::path::Path, rel_path: &str, default
 macro_rules! dg_prompt_base {
     () => {
         "IMPORTANT: This project uses DecisionGraph (dg) for decision documents. \
-Instead of jumping to implementation: (1) Ask clarifying questions first, (2) Use `dg new` to create decision documents (OPP, POL, ADR, INC, SPEC). \
+Instead of jumping to implementation: \
+(1) Use the AskUserQuestion tool to ask 3-5 clarifying questions — NEVER dump all questions as plain text, \
+(2) Wait for answers, then ask a follow-up batch if needed, \
+(3) Use EnterPlanMode to plan which documents to create, \
+(4) Use `dg new` to create decision documents (OPP, POL, ADR, INC, SPEC). \
 Read CLAUDE.md for the full workflow."
     };
 }

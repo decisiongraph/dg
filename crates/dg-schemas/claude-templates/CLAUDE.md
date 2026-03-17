@@ -10,22 +10,25 @@ This project uses `dg` to maintain a knowledge graph of decisions, architecture,
 
 ### Questioning Philosophy
 
-Your goal is to gather enough information to create **complete documents with no TBD/FIXME markers**. Ask as many questions as needed — users prefer thorough questioning over incomplete documents.
+Your goal is to gather enough information to create **complete documents with no TBD/FIXME markers**.
 
-- Ask **5-10 questions per round** until you have complete clarity
-- It's OK to ask **20-30+ questions total** across multiple rounds
+**ALWAYS use the `AskUserQuestion` tool** — never dump questions as plain text. This gives the user a proper interactive experience instead of a wall of text.
+
+- Ask **3-5 questions per batch** using `AskUserQuestion` — not all at once
+- Wait for answers before asking the next batch
+- Run **2-3 rounds** of questions to reach full clarity
 - Never guess or assume — always ask
 - Keep asking until:
   - User says "I don't know" or similar
-  - User explicitly asks you to continue/proceed without the info
+  - User explicitly asks you to proceed without the info
 - Only use TBD/FIXME when the user cannot or won't answer a question
 
 ### Workflow
 
 1. Run `dg list` to check existing context
-2. Ask clarifying questions and wait for answers
-3. **WAIT** for the user's response — do NOT proceed without answers
-4. If answers reveal new unknowns, ask follow-up questions
+2. Use `AskUserQuestion` with 3-5 questions — **wait** for answers
+3. If answers reveal new unknowns, ask a follow-up batch with `AskUserQuestion`
+4. Use `EnterPlanMode` to plan which documents to create and how to cross-link them
 5. **Only when fully informed**: Create documents with `dg new`
 
 ### What to Ask About
