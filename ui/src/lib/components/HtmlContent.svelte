@@ -3,6 +3,7 @@
 	import { isDark } from '$lib/stores/theme';
 	import { enrichContentRefs, enrichExistingDocLinks } from '$lib/actions/content-refs';
 	import { enrichUserMentions } from '$lib/actions/user-mentions';
+	import { orgData } from '$lib/stores/org';
 	import CodeCopyButton from '$lib/components/CodeCopyButton.svelte';
 
 	interface Props {
@@ -554,6 +555,18 @@
 		highlightCodeBlocks(el);
 		renderMath(el);
 		enrichFootnotes(el);
+
+		// orgData loads async — re-run mention enrichment once it's available
+		// so @handle mentions in body text get avatar links even on first page load
+		let seenOrg = false;
+		const unsub = orgData.subscribe((org) => {
+			if (org && !seenOrg) {
+				seenOrg = true;
+				enrichContentRefs(el);
+				enrichUserMentions(el);
+			}
+		});
+		return { destroy: unsub };
 	}
 
 	function hrefToSelector(href: string): string {
