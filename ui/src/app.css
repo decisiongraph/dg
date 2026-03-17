@@ -422,6 +422,43 @@ sup.footnote-has-tooltip:hover .footnote-tooltip {
   background: oklch(0.45 0.15 85 / 40%);
 }
 
+/* GFM alerts/callouts (> [!NOTE], > [!CAUTION], etc.) */
+.prose .markdown-alert {
+  border-left: 4px solid;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  font-style: normal;
+}
+.prose .markdown-alert > :first-child { margin-top: 0; }
+.prose .markdown-alert > :last-child { margin-bottom: 0; }
+.prose .markdown-alert-title {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+  margin-top: 0;
+  font-size: 0.9375rem;
+  color: inherit;
+}
+.prose .markdown-alert-title svg { width: 1em; height: 1em; flex-shrink: 0; }
+/* note */
+.prose .markdown-alert-note { border-color: #2f81f7; background: #ddf4ff20; }
+.prose .markdown-alert-note .markdown-alert-title { color: #2f81f7; }
+/* tip */
+.prose .markdown-alert-tip { border-color: #3fb950; background: #23863626; }
+.prose .markdown-alert-tip .markdown-alert-title { color: #3fb950; }
+/* important */
+.prose .markdown-alert-important { border-color: #a371f7; background: #8957e526; }
+.prose .markdown-alert-important .markdown-alert-title { color: #a371f7; }
+/* warning */
+.prose .markdown-alert-warning { border-color: #d29922; background: #bb800926; }
+.prose .markdown-alert-warning .markdown-alert-title { color: #d29922; }
+/* caution */
+.prose .markdown-alert-caution { border-color: #f85149; background: #f8514926; }
+.prose .markdown-alert-caution .markdown-alert-title { color: #f85149; }
+
 /* SvelteFlow: match dark mode */
 .dark .svelte-flow {
   --xy-background-color: var(--card);

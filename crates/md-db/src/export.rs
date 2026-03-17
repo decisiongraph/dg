@@ -217,16 +217,16 @@ h1 { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 
 .prose .markdown-alert > :last-child { margin-bottom: 0; }
 .prose .markdown-alert-title { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; font-size: 0.9375rem; }
 .prose .markdown-alert-title svg { width: 1em; height: 1em; flex-shrink: 0; }
-.prose .markdown-alert-note { border-color: #2563eb; background: #eff6ff; }
-.prose .markdown-alert-note .markdown-alert-title { color: #1d4ed8; }
-.prose .markdown-alert-tip { border-color: #16a34a; background: #f0fdf4; }
-.prose .markdown-alert-tip .markdown-alert-title { color: #15803d; }
-.prose .markdown-alert-important { border-color: #7c3aed; background: #f5f3ff; }
-.prose .markdown-alert-important .markdown-alert-title { color: #6d28d9; }
-.prose .markdown-alert-warning { border-color: #d97706; background: #fffbeb; }
-.prose .markdown-alert-warning .markdown-alert-title { color: #b45309; }
-.prose .markdown-alert-caution { border-color: #dc2626; background: #fef2f2; }
-.prose .markdown-alert-caution .markdown-alert-title { color: #b91c1c; }
+.prose .markdown-alert-note { border-color: #2f81f7; background: #ddf4ff20; }
+.prose .markdown-alert-note .markdown-alert-title { color: #2f81f7; }
+.prose .markdown-alert-tip { border-color: #3fb950; background: #23863626; }
+.prose .markdown-alert-tip .markdown-alert-title { color: #3fb950; }
+.prose .markdown-alert-important { border-color: #a371f7; background: #8957e526; }
+.prose .markdown-alert-important .markdown-alert-title { color: #a371f7; }
+.prose .markdown-alert-warning { border-color: #d29922; background: #bb800926; }
+.prose .markdown-alert-warning .markdown-alert-title { color: #d29922; }
+.prose .markdown-alert-caution { border-color: #f85149; background: #f8514926; }
+.prose .markdown-alert-caution .markdown-alert-title { color: #f85149; }
 .prose a { color: var(--c-primary); text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: border 0.1s; }
 .prose a:hover { border-bottom-color: var(--c-primary); }
 .prose table { border-collapse: collapse; width: 100%; margin: 2rem 0; font-size: 0.95rem; }
