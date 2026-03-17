@@ -18,6 +18,15 @@ pub fn run(args: &GeminiArgs) -> Result<()> {
     let mut cmd = Command::new("gemini");
     cmd.arg("--append-system-prompt").arg(DG_SYSTEM_PROMPT);
 
+    // Prepend the directory of this dg binary to PATH so hooks resolve to the
+    // same binary (and sibling binaries) regardless of system PATH.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(bin_dir) = exe.parent() {
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            cmd.env("PATH", format!("{}:{}", bin_dir.display(), current_path));
+        }
+    }
+
     // Pass through any additional arguments
     for arg in &args.args {
         cmd.arg(arg);
