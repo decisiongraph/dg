@@ -444,19 +444,19 @@ sup.footnote-has-tooltip:hover .footnote-tooltip {
 }
 .prose .markdown-alert-title svg { width: 1em; height: 1em; flex-shrink: 0; }
 /* note */
-.prose .markdown-alert-note { border-color: #2f81f7; background: #ddf4ff20; }
+.prose .markdown-alert-note { border-color: #2f81f7; background: #2f81f714; }
 .prose .markdown-alert-note .markdown-alert-title { color: #2f81f7; }
 /* tip */
-.prose .markdown-alert-tip { border-color: #3fb950; background: #23863626; }
+.prose .markdown-alert-tip { border-color: #3fb950; background: #3fb95014; }
 .prose .markdown-alert-tip .markdown-alert-title { color: #3fb950; }
 /* important */
-.prose .markdown-alert-important { border-color: #a371f7; background: #8957e526; }
+.prose .markdown-alert-important { border-color: #a371f7; background: #a371f714; }
 .prose .markdown-alert-important .markdown-alert-title { color: #a371f7; }
 /* warning */
-.prose .markdown-alert-warning { border-color: #d29922; background: #bb800926; }
+.prose .markdown-alert-warning { border-color: #d29922; background: #d2992214; }
 .prose .markdown-alert-warning .markdown-alert-title { color: #d29922; }
 /* caution */
-.prose .markdown-alert-caution { border-color: #f85149; background: #f8514926; }
+.prose .markdown-alert-caution { border-color: #f85149; background: #f8514914; }
 .prose .markdown-alert-caution .markdown-alert-title { color: #f85149; }
 
 /* SvelteFlow: match dark mode */
