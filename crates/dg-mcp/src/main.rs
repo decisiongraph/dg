@@ -210,7 +210,34 @@ fn text_content(text: &str) -> Value {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
+/// Parse --root <path> from argv, returning the resolved absolute path.
+fn parse_root_arg() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    args.windows(2).find(|w| w[0] == "--root").and_then(|w| {
+        std::fs::canonicalize(&w[1])
+            .ok()
+            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .or_else(|| Some(w[1].clone()))
+    })
+}
+
+/// Inject default values into tool args when they aren't provided by the caller.
+/// `dir` defaults to `root` so tools work without explicit path arguments.
+fn apply_defaults(args: Value, root: &Option<String>) -> Value {
+    let Some(root) = root else { return args };
+    let mut obj = match args {
+        Value::Object(m) => m,
+        other => return other,
+    };
+    if !obj.contains_key("dir") {
+        obj.insert("dir".to_string(), Value::String(root.clone()));
+    }
+    Value::Object(obj)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let root = parse_root_arg();
+
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut reader = stdin.lock();
@@ -274,7 +301,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     jsonrpc_error(&id, -32600, "not initialized")
                 } else {
                     let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                    let tool_args = params.get("arguments").cloned().unwrap_or(json!({}));
+                    let raw_args = params.get("arguments").cloned().unwrap_or(json!({}));
+                    let tool_args = apply_defaults(raw_args, &root);
 
                     match tools::handle_tool_call(tool_name, &tool_args) {
                         Ok(result) => {
