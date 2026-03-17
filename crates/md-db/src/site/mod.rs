@@ -217,5 +217,66 @@ pub fn generate_site(
         dir,
     )?;
 
-    Ok(spa_count + data_count)
+    // 8. Write per-route index.html for static server compatibility
+    let fallback_count = write_fallback_pages(output_dir, &by_type, schema, org)?;
+
+    Ok(spa_count + data_count + fallback_count)
+}
+
+/// Write a copy of index.html into each SPA route directory so plain static
+/// servers (e.g. `python3 -m http.server`) can serve deep links without 404.
+fn write_fallback_pages(
+    output_dir: &Path,
+    by_type: &BTreeMap<String, Vec<(String, &Document)>>,
+    schema: &Schema,
+    org: Option<&OrgConfig>,
+) -> crate::error::Result<usize> {
+    let index_html = std::fs::read(output_dir.join("index.html"))
+        .map_err(|_| crate::error::Error::WriteFailed(output_dir.join("index.html")))?;
+
+    let mut routes: Vec<String> = vec![
+        "roadmap".into(),
+        "graph".into(),
+        "onboarding".into(),
+        "kanban".into(),
+        "org".into(),
+        "org/teams".into(),
+        "org/users".into(),
+        "org/entities".into(),
+    ];
+
+    // Per-doc-type list + per-doc routes
+    for (type_key, docs) in by_type {
+        let folder = schema
+            .get_type(type_key)
+            .and_then(|t| t.folder.as_deref())
+            .unwrap_or(type_key.as_str());
+        routes.push(folder.to_string());
+        for (id, _) in docs {
+            routes.push(format!("{}/{}", folder, id.to_lowercase()));
+        }
+    }
+
+    // Org entity routes
+    if let Some(org_cfg) = org {
+        for id in org_cfg.teams.keys() {
+            routes.push(format!("org/teams/{}", id.to_lowercase()));
+        }
+        for user in org_cfg.users.values() {
+            routes.push(format!("org/users/{}", user.handle.to_lowercase()));
+        }
+        for id in org_cfg.orgs.keys() {
+            routes.push(format!("org/{}", id.to_lowercase()));
+        }
+    }
+
+    let mut count = 0;
+    for route in &routes {
+        let dir = output_dir.join(route);
+        std::fs::create_dir_all(&dir).map_err(|_| crate::error::Error::WriteFailed(dir.clone()))?;
+        let dest = dir.join("index.html");
+        std::fs::write(&dest, &index_html).map_err(|_| crate::error::Error::WriteFailed(dest))?;
+        count += 1;
+    }
+    Ok(count)
 }
