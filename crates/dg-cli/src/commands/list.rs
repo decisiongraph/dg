@@ -211,6 +211,14 @@ pub fn run(root: &Path, schema: &Schema, args: &ListArgs, users: Option<&OrgConf
     // Partition into typed and untyped
     let (mut typed, mut untyped): (Vec<_>, Vec<_>) = entries.into_iter().partition(is_typed);
 
+    // Exclude untyped files that are not in docs/ and not named README.md —
+    // these are project-level markdown files (CLAUDE.md, AGENTS.md, etc.) that
+    // are not decision documents and would only clutter the output.
+    untyped.retain(|e| {
+        let p = std::path::Path::new(&e.path);
+        p.starts_with("docs") || p.file_name().is_some_and(|n| n == "README.md")
+    });
+
     // When grouping by type, default sort to date descending (unless user explicitly set --sort)
     let effective_sort = if args.group_by.is_some() && args.sort == "path" {
         "date"
