@@ -241,7 +241,10 @@
         trap 'rm -rf "$D"' EXIT
 
         # Build release binary first (synchronous) so target/release/dg is always up to date
-        if ! cargo build --release >"$D/build.log" 2>&1; then
+        if cargo build --release >"$D/build.log" 2>&1; then
+          # Keep ~/.local/bin/dg in sync so hooks work outside devenv shell
+          [ -d "$HOME/.local/bin" ] && cp "$ROOT/target/release/dg" "$HOME/.local/bin/dg" || true
+        else
           echo "FAIL" > "$D/build"
         fi
 
