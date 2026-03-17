@@ -24,6 +24,24 @@ pub struct CodeRef {
     pub line: usize,
     /// Trimmed line content (truncated at 200 chars).
     pub text: String,
+    /// Up to 2 lines before the match (trimmed, oldest first).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_before: Vec<String>,
+    /// Up to 2 lines after the match (trimmed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub context_after: Vec<String>,
+}
+
+/// Internal cache entry for a single code reference (includes context).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CachedFileRef {
+    doc_id: String,
+    line: usize,
+    text: String,
+    #[serde(default)]
+    context_before: Vec<String>,
+    #[serde(default)]
+    context_after: Vec<String>,
 }
 
 /// A reference to a document ID found in a git commit message.
@@ -65,9 +83,9 @@ pub struct CodeRefCache {
     /// Per-file scan state.
     #[serde(default)]
     file_states: HashMap<String, FileState>,
-    /// Per-file discovered refs: path → [(doc_id, line, text)].
+    /// Per-file discovered refs: path → [CachedFileRef].
     #[serde(default)]
-    file_refs: HashMap<String, Vec<(String, usize, String)>>,
+    file_refs: HashMap<String, Vec<CachedFileRef>>,
     /// HEAD SHA at last git scan.
     #[serde(default)]
     last_commit_sha: Option<String>,
@@ -279,12 +297,25 @@ pub fn scan_code_refs(root: &Path, schema: &Schema, cache: &mut CodeRefCache) {
         }
 
         // Content changed — re-scan
-        let mut file_matches: Vec<(String, usize, String)> = Vec::new();
-        for (line_num, line) in content.lines().enumerate() {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut file_matches: Vec<CachedFileRef> = Vec::new();
+        for (line_num, line) in lines.iter().enumerate() {
             for m in re.find_iter(line) {
                 let doc_id = m.as_str().to_uppercase();
                 let text: String = line.trim().chars().take(200).collect();
-                file_matches.push((doc_id, line_num + 1, text));
+                let context_before = (line_num.saturating_sub(2)..line_num)
+                    .map(|i| lines[i].trim().chars().take(200).collect())
+                    .collect();
+                let context_after = (line_num + 1..usize::min(lines.len(), line_num + 3))
+                    .map(|i| lines[i].trim().chars().take(200).collect())
+                    .collect();
+                file_matches.push(CachedFileRef {
+                    doc_id,
+                    line: line_num + 1,
+                    text,
+                    context_before,
+                    context_after,
+                });
             }
         }
 
@@ -556,12 +587,14 @@ fn rebuild_code_index(cache: &mut CodeRefCache) {
 
     // Re-populate from file_refs
     for (file_path, refs) in &cache.file_refs {
-        for (doc_id, line, text) in refs {
-            let entry = cache.index.entry(doc_id.clone()).or_default();
+        for r in refs {
+            let entry = cache.index.entry(r.doc_id.clone()).or_default();
             entry.code.push(CodeRef {
                 file: file_path.clone(),
-                line: *line,
-                text: text.clone(),
+                line: r.line,
+                text: r.text.clone(),
+                context_before: r.context_before.clone(),
+                context_after: r.context_after.clone(),
             });
         }
     }
@@ -647,6 +680,8 @@ type "pol" {
                     file: "src/main.rs".to_string(),
                     line: 42,
                     text: "// Implements ADR-001".to_string(),
+                    context_before: vec![],
+                    context_after: vec![],
                 }],
                 commits: vec![],
             },

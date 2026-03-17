@@ -1748,6 +1748,10 @@ struct CodeRefItemJson {
     file: String,
     line: usize,
     text: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    context_before: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    context_after: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -1802,6 +1806,8 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
                     file: r.file.clone(),
                     line: r.line,
                     text: r.text.clone(),
+                    context_before: r.context_before.clone(),
+                    context_after: r.context_after.clone(),
                 })
                 .collect();
             let commits = doc_refs

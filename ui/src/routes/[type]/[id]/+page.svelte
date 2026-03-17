@@ -200,16 +200,57 @@
 	const commitUrlPrefix = $derived($codeRefsData?.commit_url_prefix ?? '');
 	const fileUrlPrefix = $derived($codeRefsData?.file_url_prefix ?? '');
 
-	/** Group code refs by file path for cleaner display */
+	/**
+	 * Group code refs by file, then merge overlapping/adjacent context windows
+	 * into unified blocks separated by '...' gaps.
+	 */
 	const codeRefsByFile = $derived.by(() => {
 		if (!docCodeRefs?.code.length) return [];
-		const map = new Map<string, { line: number; text: string }[]>();
+
+		// Group by file
+		const map = new Map<string, import('$lib/types').CodeRef[]>();
 		for (const ref of docCodeRefs.code) {
 			const entries = map.get(ref.file) ?? [];
-			entries.push({ line: ref.line, text: ref.text });
+			entries.push(ref);
 			map.set(ref.file, entries);
 		}
-		return [...map.entries()].map(([file, refs]) => ({ file, refs }));
+
+		return [...map.entries()].map(([file, refs]) => {
+			// Build a sorted list of all lines (with content) that should appear
+			// Each ref contributes: context_before lines + match line + context_after lines
+			type LineEntry = { lineNum: number; text: string; isMatch: boolean };
+			const lineMap = new Map<number, LineEntry>();
+
+			for (const ref of refs) {
+				const before = ref.context_before ?? [];
+				const after = ref.context_after ?? [];
+				const startLine = ref.line - before.length;
+				before.forEach((t, i) => {
+					const n = startLine + i;
+					if (!lineMap.has(n)) lineMap.set(n, { lineNum: n, text: t, isMatch: false });
+				});
+				lineMap.set(ref.line, { lineNum: ref.line, text: ref.text, isMatch: true });
+				after.forEach((t, i) => {
+					const n = ref.line + 1 + i;
+					if (!lineMap.has(n)) lineMap.set(n, { lineNum: n, text: t, isMatch: false });
+				});
+			}
+
+			// Sort by line number
+			const sorted = [...lineMap.values()].sort((a, b) => a.lineNum - b.lineNum);
+
+			// Split into blocks separated by gaps, inserting '...' markers
+			type Block = { lineNum: number; text: string; isMatch: boolean } | { gap: true };
+			const blocks: Block[] = [];
+			for (let i = 0; i < sorted.length; i++) {
+				if (i > 0 && sorted[i].lineNum > sorted[i - 1].lineNum + 1) {
+					blocks.push({ gap: true });
+				}
+				blocks.push(sorted[i]);
+			}
+
+			return { file, blocks };
+		});
 	});
 
 	/** Map file extension → highlight.js language name */
@@ -527,20 +568,24 @@
 							{/if}
 						</div>
 						<div class="overflow-x-auto">
-							{#each fileGroup.refs.slice(0, 15) as ref}
-								<div class="flex items-baseline border-b border-border/30 last:border-0 hover:bg-muted/30">
-									{#if fileUrlPrefix}
-										<a href="{fileUrlPrefix}{fileGroup.file}#L{ref.line}" target="_blank" rel="noopener noreferrer"
-											class="shrink-0 w-14 text-right pr-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-primary select-none no-underline">{ref.line}</a>
-									{:else}
-										<span class="shrink-0 w-14 text-right pr-3 py-1.5 text-xs font-mono text-muted-foreground select-none">{ref.line}</span>
-									{/if}
-									<code class="py-1.5 pr-4 text-xs font-mono whitespace-pre" use:highlightCode={extToLang(fileGroup.file)}>{ref.text}</code>
-								</div>
+							{#each fileGroup.blocks as block}
+								{#if 'gap' in block}
+									<div class="flex items-center border-b border-border/30 px-3 py-0.5 bg-muted/20 select-none">
+										<span class="w-14 shrink-0"></span>
+										<span class="text-xs font-mono text-muted-foreground">···</span>
+									</div>
+								{:else}
+									<div class="flex items-baseline border-b border-border/30 last:border-0 {block.isMatch ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'hover:bg-muted/30'}">
+										{#if fileUrlPrefix && block.isMatch}
+											<a href="{fileUrlPrefix}{fileGroup.file}#L{block.lineNum}" target="_blank" rel="noopener noreferrer"
+												class="shrink-0 w-14 text-right pr-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-primary select-none no-underline">{block.lineNum}</a>
+										{:else}
+											<span class="shrink-0 w-14 text-right pr-3 py-1.5 text-xs font-mono text-muted-foreground select-none">{block.lineNum}</span>
+										{/if}
+										<code class="py-1.5 pr-4 text-xs font-mono whitespace-pre {block.isMatch ? '' : 'opacity-60'}" use:highlightCode={extToLang(fileGroup.file)}>{block.text}</code>
+									</div>
+								{/if}
 							{/each}
-							{#if fileGroup.refs.length > 15}
-								<div class="px-4 py-2 text-xs text-muted-foreground">+{fileGroup.refs.length - 15} more references in this file</div>
-							{/if}
 						</div>
 					</div>
 				{/each}

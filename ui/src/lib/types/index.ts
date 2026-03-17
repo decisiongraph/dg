@@ -196,6 +196,8 @@ export interface CodeRef {
 	file: string;
 	line: number;
 	text: string;
+	context_before?: string[];
+	context_after?: string[];
 }
 
 export interface CommitRef {
