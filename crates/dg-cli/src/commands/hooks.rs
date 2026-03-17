@@ -48,7 +48,7 @@ pub enum HooksCommand {
 
 pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
     match &args.command {
-        HooksCommand::CheckFixme { file_path } => check_fixme(file_path.as_deref()),
+        HooksCommand::CheckFixme { file_path } => check_fixme(file_path.as_deref(), root),
         HooksCommand::CheckCode { files } => check_code(root, files),
         HooksCommand::PrepareCommitMsg {
             message_file,
@@ -60,22 +60,22 @@ pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
     }
 }
 
-fn check_fixme(file_path: Option<&str>) -> Result<()> {
-    let Some(path) = file_path else {
+fn check_fixme(file_path: Option<&str>, root: &Path) -> Result<()> {
+    let Some(path_str) = file_path else {
         return Ok(());
     };
 
     // Only check files in docs/ directory
-    if !path.starts_with("docs/") {
+    if !path_str.starts_with("docs/") {
         return Ok(());
     }
 
-    let path = Path::new(path);
-    if !path.is_file() {
+    let abs = root.join(path_str);
+    if !abs.is_file() {
         return Ok(());
     }
 
-    let content = std::fs::read_to_string(path)?;
+    let content = std::fs::read_to_string(&abs)?;
     let content_upper = content.to_uppercase();
 
     let markers = ["FIXME", "TBD", "TODO", "XXX", "[TBD]", "[FIXME]"];
@@ -350,7 +350,16 @@ fn check_lint(root: &Path) -> Result<()> {
 /// Prints block JSON to stdout if command is forbidden.
 fn deny_command() -> Result<()> {
     let input = std::env::var("CLAUDE_TOOL_INPUT").unwrap_or_default();
-    let command = serde_json::from_str::<serde_json::Value>(&input)
+    if let Some((decision, reason)) = deny_command_with_input(&input) {
+        let response = serde_json::json!({ "decision": decision, "reason": reason });
+        println!("{response}");
+    }
+    Ok(())
+}
+
+/// Inner logic for deny_command — returns Some((decision, reason)) if the command should be blocked.
+fn deny_command_with_input(input: &str) -> Option<(String, String)> {
+    let command = serde_json::from_str::<serde_json::Value>(input)
         .ok()
         .and_then(|v| v.get("command").and_then(|c| c.as_str()).map(String::from))
         .unwrap_or_default();
@@ -362,14 +371,170 @@ fn deny_command() -> Result<()> {
 
     for (pattern, reason) in DENIED {
         if command.contains(pattern) {
-            let response = serde_json::json!({
-                "decision": "block",
-                "reason": reason,
-            });
-            println!("{}", response);
-            return Ok(());
+            return Some(("block".to_string(), reason.to_string()));
         }
     }
 
-    Ok(())
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    // ── Template validation helpers ───────────────────────────────────────────
+
+    #[derive(clap::Parser)]
+    struct TestHooksCli {
+        #[command(subcommand)]
+        cmd: HooksCommand,
+    }
+
+    fn valid_hook_subcommand_names() -> Vec<String> {
+        use clap::CommandFactory;
+        TestHooksCli::command()
+            .get_subcommands()
+            .map(|sc| sc.get_name().to_string())
+            .collect()
+    }
+
+    /// Extract `dg hooks <subcommand>` names from any string (JSON or shell script).
+    fn extract_hook_subcommands(content: &str) -> Vec<String> {
+        let mut result = Vec::new();
+        for line in content.lines() {
+            if let Some(pos) = line.find("dg hooks ") {
+                let rest = &line[pos + "dg hooks ".len()..];
+                let cmd = rest
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .trim_matches('"');
+                if !cmd.is_empty() && !cmd.starts_with('$') {
+                    result.push(cmd.to_string());
+                }
+            }
+        }
+        result.dedup();
+        result
+    }
+
+    // ── Template validation tests ─────────────────────────────────────────────
+
+    #[test]
+    fn hooks_settings_is_valid_json() {
+        serde_json::from_str::<serde_json::Value>(dg_schemas::HOOKS_SETTINGS).unwrap();
+    }
+
+    #[test]
+    fn hooks_settings_subcommands_match_implementation() {
+        let valid = valid_hook_subcommand_names();
+        for cmd in extract_hook_subcommands(dg_schemas::HOOKS_SETTINGS) {
+            assert!(
+                valid.contains(&cmd),
+                "HOOKS_SETTINGS references unknown subcommand 'dg hooks {cmd}'. Valid: {valid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn gemini_hook_scripts_subcommands_match_implementation() {
+        let valid = valid_hook_subcommand_names();
+        for (name, content) in [
+            ("check-fixme.sh", dg_schemas::GEMINI_HOOK_CHECK_FIXME),
+            ("check-code.sh", dg_schemas::GEMINI_HOOK_CHECK_CODE),
+        ] {
+            for cmd in extract_hook_subcommands(content) {
+                assert!(
+                    valid.contains(&cmd),
+                    "Gemini {name} references unknown subcommand 'dg hooks {cmd}'. Valid: {valid:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn opencode_hook_scripts_subcommands_match_implementation() {
+        let valid = valid_hook_subcommand_names();
+        for (name, content) in [
+            ("check-fixme.sh", dg_schemas::OPENCODE_HOOK_CHECK_FIXME),
+            ("check-code.sh", dg_schemas::OPENCODE_HOOK_CHECK_CODE),
+        ] {
+            for cmd in extract_hook_subcommands(content) {
+                assert!(
+                    valid.contains(&cmd),
+                    "OpenCode {name} references unknown subcommand 'dg hooks {cmd}'. Valid: {valid:?}"
+                );
+            }
+        }
+    }
+
+    // ── deny_command unit tests ───────────────────────────────────────────────
+
+    #[test]
+    fn deny_command_blocks_eject() {
+        let result = deny_command_with_input(r#"{"command":"dg init --eject"}"#);
+        assert!(result.is_some());
+        let (decision, _reason) = result.unwrap();
+        assert_eq!(decision, "block");
+    }
+
+    #[test]
+    fn deny_command_allows_normal_commands() {
+        assert!(deny_command_with_input(r#"{"command":"dg list"}"#).is_none());
+    }
+
+    #[test]
+    fn deny_command_empty_input_is_allowed() {
+        assert!(deny_command_with_input("").is_none());
+    }
+
+    // ── check_fixme unit tests ────────────────────────────────────────────────
+
+    #[test]
+    fn check_fixme_detects_markers_in_docs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let docs_dir = tmp.path().join("docs");
+        fs::create_dir_all(&docs_dir).unwrap();
+        fs::write(docs_dir.join("adr-001.md"), "# ADR\n\nFIXME: incomplete").unwrap();
+        // Should not error — warnings go to stderr, not errors
+        check_fixme(Some("docs/adr-001.md"), tmp.path()).unwrap();
+    }
+
+    #[test]
+    fn check_fixme_ignores_files_outside_docs() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("main.rs"), "FIXME: fix me").unwrap();
+        check_fixme(Some("main.rs"), tmp.path()).unwrap();
+    }
+
+    #[test]
+    fn check_fixme_clean_doc_passes_silently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let docs_dir = tmp.path().join("docs");
+        fs::create_dir_all(&docs_dir).unwrap();
+        fs::write(docs_dir.join("adr-001.md"), "# ADR\n\nAll good here.").unwrap();
+        check_fixme(Some("docs/adr-001.md"), tmp.path()).unwrap();
+    }
+
+    #[test]
+    fn check_fixme_nonexistent_file_is_ok() {
+        let tmp = tempfile::tempdir().unwrap();
+        check_fixme(Some("docs/nonexistent.md"), tmp.path()).unwrap();
+    }
+
+    // ── extract_doc_ids unit tests ────────────────────────────────────────────
+
+    #[test]
+    fn extract_doc_ids_parses_doc_paths() {
+        let files = vec!["docs/architecture/adr-001-foo.md".to_string()];
+        assert_eq!(extract_doc_ids(&files), vec!["ADR-001"]);
+    }
+
+    #[test]
+    fn extract_doc_ids_ignores_non_doc_paths() {
+        let files = vec!["src/main.rs".to_string(), "Cargo.toml".to_string()];
+        assert!(extract_doc_ids(&files).is_empty());
+    }
 }
