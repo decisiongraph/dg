@@ -54,7 +54,7 @@ pub fn run(
         users: !args.no_users,
         roadmap_html,
         roadmap_generated_at,
-        readme_html: None,
+        readme_html: render_readme_html(root),
         logo_path: None,
         edit_url_prefix,
         is_local_dev: false,
