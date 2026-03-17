@@ -47,12 +47,6 @@ pub const SKILL_IMAGE: &str = include_str!("../claude-templates/skills/image.md"
 /// Claude Code hooks settings.json template.
 pub const HOOKS_SETTINGS: &str = include_str!("../claude-templates/hooks/settings.json");
 
-/// FIXME/TBD check hook script.
-pub const HOOK_CHECK_FIXME: &str = include_str!("../claude-templates/hooks/check-fixme.sh");
-
-/// Code-path check hook script (matches changed files against decision doc code_paths).
-pub const HOOK_CHECK_CODE: &str = include_str!("../claude-templates/hooks/check-code.sh");
-
 // --- Gemini CLI templates ---
 
 /// Provider-agnostic AGENTS.md template (works with Claude, Gemini, Codex).
@@ -213,14 +207,6 @@ pub static ALL_TEMPLATES: &[EmbeddedTemplate] = &[
     EmbeddedTemplate {
         rel_path: "claude/hooks/settings.json",
         content: HOOKS_SETTINGS,
-    },
-    EmbeddedTemplate {
-        rel_path: "claude/hooks/check-fixme.sh",
-        content: HOOK_CHECK_FIXME,
-    },
-    EmbeddedTemplate {
-        rel_path: "claude/hooks/check-code.sh",
-        content: HOOK_CHECK_CODE,
     },
     // Shared AGENTS.md
     EmbeddedTemplate {

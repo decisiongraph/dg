@@ -17,11 +17,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/check-fixme.sh \"$CLAUDE_FILE_PATH\""
+            "command": "dg hooks check-fixme \"$CLAUDE_FILE_PATH\""
           },
           {
             "type": "command",
-            "command": ".claude/hooks/check-code.sh"
+            "command": "dg hooks check-code \"$CLAUDE_FILE_PATH\""
           }
         ]
       }

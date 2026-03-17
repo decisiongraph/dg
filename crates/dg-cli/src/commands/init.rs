@@ -409,11 +409,7 @@ fn write_claude_files(root: &Path, use_agents_md: bool) -> Result<()> {
     )
     .context("failed to write image skill")?;
 
-    // Write hooks
-    let hooks_dir = root.join(".claude/hooks");
-    fs::create_dir_all(&hooks_dir).context("failed to create .claude/hooks/")?;
-
-    // settings.local.json for hooks (merged with any existing settings)
+    // Write settings.local.json (hooks config — commands call dg hooks directly)
     fs::write(
         root.join(".claude/settings.local.json"),
         resolve(
@@ -423,32 +419,6 @@ fn write_claude_files(root: &Path, use_agents_md: bool) -> Result<()> {
         ),
     )
     .context("failed to write settings.local.json")?;
-
-    // check-fixme.sh script
-    let script_path = hooks_dir.join("check-fixme.sh");
-    fs::write(
-        &script_path,
-        resolve(
-            root,
-            "claude/hooks/check-fixme.sh",
-            dg_schemas::HOOK_CHECK_FIXME,
-        ),
-    )
-    .context("failed to write check-fixme.sh")?;
-    make_executable(&script_path)?;
-
-    // check-code.sh script
-    let script_path = hooks_dir.join("check-code.sh");
-    fs::write(
-        &script_path,
-        resolve(
-            root,
-            "claude/hooks/check-code.sh",
-            dg_schemas::HOOK_CHECK_CODE,
-        ),
-    )
-    .context("failed to write check-code.sh")?;
-    make_executable(&script_path)?;
 
     Ok(())
 }
