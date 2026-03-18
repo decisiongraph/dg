@@ -286,29 +286,30 @@ fn handle_request(
         let mut resp = tiny_http::Response::from_data(content).with_header(
             tiny_http::Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap(),
         );
-        // Immutable assets (hashed filenames) get long cache; data files get no-cache
-        if url_path.contains("/_app/immutable/") {
-            resp = resp.with_header(
-                tiny_http::Header::from_bytes(
-                    &b"Cache-Control"[..],
-                    &b"public, max-age=31536000, immutable"[..],
-                )
-                .unwrap(),
-            );
-        }
+        // Immutable assets (hashed filenames) get long cache; everything else no-cache
+        let cache_val: &[u8] = if url_path.contains("/_app/immutable/") {
+            b"public, max-age=31536000, immutable"
+        } else {
+            b"no-cache"
+        };
+        resp = resp
+            .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], cache_val).unwrap());
         resp
     } else if file_path.is_dir() && file_path.join("index.html").is_file() {
         let content = std::fs::read(file_path.join("index.html")).unwrap_or_default();
         tiny_http::Response::from_data(content)
             .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/html").unwrap())
+            .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap())
     } else {
         // SPA fallback: serve index.html for non-asset routes
         let fallback = output.join("index.html");
         let content = std::fs::read(&fallback).unwrap_or_default();
-        tiny_http::Response::from_data(content).with_header(
-            tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/html; charset=utf-8")
-                .unwrap(),
-        )
+        tiny_http::Response::from_data(content)
+            .with_header(
+                tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/html; charset=utf-8")
+                    .unwrap(),
+            )
+            .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap())
     }
 }
 
