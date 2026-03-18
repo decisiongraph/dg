@@ -330,6 +330,12 @@ h6:hover > .heading-anchor,
   padding-left: 1.5em;
 }
 
+/* Inline user mention avatars: prevent prose img defaults from inflating size */
+.prose .group\/mention img {
+  margin: 0;
+  display: inline;
+}
+
 /* Kill top margin on first content element in doc body (3-level HtmlContent nesting) */
 .doc-body > :first-child,
 .doc-body > :first-child > :first-child,
