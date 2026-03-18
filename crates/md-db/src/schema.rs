@@ -138,6 +138,10 @@ pub struct SectionDef {
     pub content: Option<ContentDef>,
     pub list: Option<ListDef>,
     pub diagram: Option<DiagramDef>,
+    /// Minimum number of subsections (child headings) required.
+    pub min_subsections: Option<usize>,
+    /// Whether a GFM callout (`> [!NOTE]`, `> [!WARNING]`, etc.) is required.
+    pub callout_required: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -518,6 +522,8 @@ fn parse_section_def(node: &KdlNode) -> Result<SectionDef> {
         .ok_or_else(|| Error::SchemaParse("section node missing name".into()))?;
     let required = get_bool_prop(node, "required").unwrap_or(false);
     let description = get_string_prop(node, "description");
+    let min_subsections = get_i64_prop(node, "min-subsections").map(|n| n as usize);
+    let callout_required = get_bool_prop(node, "callout").unwrap_or(false);
 
     let mut children = Vec::new();
     let mut table = None;
@@ -551,6 +557,8 @@ fn parse_section_def(node: &KdlNode) -> Result<SectionDef> {
         content,
         list,
         diagram,
+        min_subsections,
+        callout_required,
     })
 }
 

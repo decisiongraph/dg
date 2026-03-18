@@ -32,6 +32,8 @@ pub struct ParsedSection {
     pub code_block_languages: Vec<String>,
     /// Code blocks as (language, content) pairs for diagram validation.
     pub code_blocks: Vec<(String, String)>,
+    /// Whether section content contains a GFM callout (`> [!NOTE]`, `> [!WARNING]`, etc.).
+    pub has_callout: bool,
     pub children: Vec<ParsedSection>,
 }
 
@@ -232,6 +234,7 @@ impl Document {
                     ast_util::count_list_info(sec_root);
                 let code_block_languages = ast_util::collect_code_block_languages(sec_root);
                 let code_blocks = ast_util::collect_code_blocks(sec_root);
+                let has_callout = content.lines().any(|l| l.trim_start().starts_with("> [!"));
 
                 ParsedSection {
                     heading,
@@ -244,6 +247,7 @@ impl Document {
                     list_is_ordered,
                     code_block_languages,
                     code_blocks,
+                    has_callout,
                     children: Vec::new(),
                 }
             })

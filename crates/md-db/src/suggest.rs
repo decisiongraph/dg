@@ -1054,6 +1054,8 @@ mod tests {
                     content: None,
                     list: None,
                     diagram: None,
+                    min_subsections: None,
+                    callout_required: false,
                 },
                 SectionDef {
                     name: "Optional".into(),
@@ -1064,6 +1066,8 @@ mod tests {
                     content: None,
                     list: None,
                     diagram: None,
+                    min_subsections: None,
+                    callout_required: false,
                 },
             ],
             rules: vec![],
@@ -1100,6 +1104,8 @@ mod tests {
                 content: None,
                 list: None,
                 diagram: None,
+                min_subsections: None,
+                callout_required: false,
             }],
             rules: vec![],
         };
@@ -1135,6 +1141,8 @@ mod tests {
                     required: false,
                     diagram_type: Some("d2".into()),
                 }),
+                min_subsections: None,
+                callout_required: false,
             }],
             rules: vec![],
         };
@@ -1172,6 +1180,8 @@ mod tests {
                     required: false,
                     diagram_type: Some("d2".into()),
                 }),
+                min_subsections: None,
+                callout_required: false,
             }],
             rules: vec![],
         };

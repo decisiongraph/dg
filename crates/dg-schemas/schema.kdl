@@ -190,8 +190,7 @@ type "readme" folder="." max_count=1 singleton=#true description="Project README
     section "Architecture" required=#true description="High-level system diagram (C4, block, etc.)" {
         diagram required=#true
     }
-    section "Risks" required=#true description="Top business risks: data breach, GDPR, data loss, pricing errors, theft, reputation damage, etc." {
-        content min-paragraphs=1
+    section "Risks" required=#true min-subsections=1 callout=#true description="Top business risks: data breach, GDPR, data loss, pricing errors, theft, reputation damage, etc." {
     }
     section "License" required=#true description="License name or proprietary notice" {
         content min-paragraphs=1

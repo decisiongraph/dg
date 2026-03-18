@@ -1112,6 +1112,40 @@ fn validate_sections_parsed(
                     }
                 }
 
+                // Min-subsections constraint — check child heading count
+                if let Some(min) = sec_def.min_subsections {
+                    if section.children.len() < min {
+                        diags.push(Diagnostic {
+                            severity: Severity::Error,
+                            code: "S034".into(),
+                            message: format!(
+                                "section \"{}\" requires at least {} subsection(s), found {}",
+                                sec_def.name,
+                                min,
+                                section.children.len()
+                            ),
+                            location: format!("section \"{}\"", sec_def.name),
+                            hint: Some(format!(
+                                "add at least {min} subsection(s) with ### headings"
+                            )),
+                        });
+                    }
+                }
+
+                // Callout constraint — check for GFM callout blockquote
+                if sec_def.callout_required && !section.has_callout {
+                    diags.push(Diagnostic {
+                        severity: Severity::Error,
+                        code: "S035".into(),
+                        message: format!(
+                            "section \"{}\" requires a GFM callout but none found",
+                            sec_def.name
+                        ),
+                        location: format!("section \"{}\"", sec_def.name),
+                        hint: Some("add a callout like: > [!WARNING]\\n> Risk summary here".into()),
+                    });
+                }
+
                 // Recurse into child sections
                 if !sec_def.children.is_empty() {
                     let mut path: Vec<&str> = parent_path.to_vec();
