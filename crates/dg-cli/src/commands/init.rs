@@ -132,6 +132,8 @@ pub fn run(
              ```d2\n\
              # Add your architecture diagram here\n\
              ```\n\n\
+             ## Risks\n\n\
+             TODO: Document top business risks (data breach, GDPR violation, data loss, pricing errors, etc.)\n\n\
              ## License\n\n\
              TODO: Add license information.\n"
         );
