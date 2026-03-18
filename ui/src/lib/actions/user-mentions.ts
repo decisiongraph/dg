@@ -72,7 +72,7 @@ export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): s
 
 	// Badge (link wrapping the initials circle)
 	const badge = user.avatar_url
-		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-6 h-6" />`
+		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-6 h-6 shrink-0 align-middle" />`
 		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-6 h-6 text-[10px] ${bg} ${fg}">${ini}</span>`;
 
 	// Hover card content
@@ -104,7 +104,7 @@ export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): s
 
 	const hoverCard = `<span class="user-hovercard" style="display:none;">${hoverContent}</span>`;
 
-	return `<a href="/org/users/${esc(handle)}" class="group/mention relative inline-flex items-center">${badge}${hoverCard}</a>`;
+	return `<a href="/org/users/${esc(handle)}" class="group/mention relative inline-flex items-center h-6 overflow-hidden">${badge}${hoverCard}</a>`;
 }
 
 /** Shared floating hover card element, created once and reused. */
