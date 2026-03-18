@@ -25,6 +25,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dg hooks stop"
+          }
+        ]
+      }
     ]
   }
 }

@@ -44,6 +44,8 @@ pub enum HooksCommand {
     DenyCommand,
     /// Run linters for services/apps (AI agent integration)
     CheckLint,
+    /// Stop hook: check for remaining work (validation errors, suggestions, unimplemented specs)
+    Stop,
 }
 
 pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
@@ -57,6 +59,7 @@ pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
         HooksCommand::CommitMsg { message_file } => commit_msg(message_file),
         HooksCommand::DenyCommand => deny_command(),
         HooksCommand::CheckLint => check_lint(root),
+        HooksCommand::Stop => stop(root),
     }
 }
 
@@ -100,19 +103,12 @@ fn check_code(root: &Path, files: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    // Try to load schema: .dg/schema.kdl > built-in default; no .dg/ = skip
     let dg_dir = root.join(".dg");
     if !dg_dir.is_dir() {
         return Ok(());
     }
 
-    let schema_path = dg_dir.join("schema.kdl");
-    let schema = if schema_path.is_file() {
-        md_db::schema::Schema::from_file(&schema_path).context("failed to load schema")?
-    } else {
-        md_db::schema::Schema::from_str(dg_schemas::SCHEMA)
-            .context("failed to parse built-in schema")?
-    };
+    let schema = load_schema(&dg_dir)?;
 
     let matches =
         md_db::code_paths::check_code_paths(root, &schema, files).context("check-code failed")?;
@@ -267,6 +263,127 @@ fn commit_msg(message_file: &str) -> Result<()> {
 
     // Always succeed — this is advisory, not blocking
     Ok(())
+}
+
+fn stop(root: &Path) -> Result<()> {
+    let dg_dir = root.join(".dg");
+    if !dg_dir.is_dir() {
+        return Ok(());
+    }
+
+    let schema = load_schema(&dg_dir)?;
+    let org = load_org_config(&dg_dir);
+    let mut issues = Vec::new();
+
+    // 1. Validate — block on errors
+    let val_result = md_db::validation::validate_directory(root, &schema, None, org.as_ref())?;
+    let errors = val_result.total_errors();
+    if errors > 0 {
+        issues.push(format!(
+            "dg validate found {errors} error(s). Run `dg validate` and fix them."
+        ));
+    }
+
+    // 2. Suggest — advisory
+    let today = today_str();
+    let suggestions = md_db::suggest::suggest_directory(root, &schema, None, &today)?;
+    let total = suggestions.total();
+    if total > 0 {
+        let doc_count = suggestions
+            .file_results
+            .iter()
+            .filter(|f| !f.suggestions.is_empty())
+            .count();
+        issues.push(format!(
+            "dg suggest found {total} suggestion(s) across {doc_count} document(s). Run `dg suggest` for details."
+        ));
+    }
+
+    // 3. Check for SPEC docs without implementation code
+    let has_code = ["services", "apps", "src", "lib"].iter().any(|d| {
+        let dir = root.join(d);
+        dir.is_dir()
+            && std::fs::read_dir(&dir)
+                .map(|mut r| r.next().is_some())
+                .unwrap_or(false)
+    });
+
+    if !has_code {
+        let files = md_db::discovery::discover_files(root, None, &[], false)?;
+        for f in &files {
+            let id = md_db::graph::path_to_id(f);
+            if !id.starts_with("SPEC-") {
+                continue;
+            }
+            let doc = match md_db::document::Document::from_file(f) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let fm = match &doc.frontmatter {
+                Some(fm) => fm,
+                None => continue,
+            };
+            let title = fm.get_display("title").filter(|t| !t.is_empty());
+            let status = fm.get_display("status").unwrap_or_default();
+            let label = match &title {
+                Some(t) => format!("{id} \"{t}\""),
+                None => id.clone(),
+            };
+            issues.push(format!(
+                "{label} ({status}) has no implementation code yet.\n  \
+                 Start building based on the spec: create the project in services/ or apps/."
+            ));
+        }
+    }
+
+    if issues.is_empty() {
+        return Ok(());
+    }
+
+    eprintln!("Stop hook found remaining work:\n");
+    for issue in &issues {
+        eprintln!("- {issue}");
+    }
+    eprintln!("\nPlease continue working on these items.");
+    std::process::exit(2);
+}
+
+fn load_schema(dg_dir: &Path) -> Result<md_db::schema::Schema> {
+    let schema_path = dg_dir.join("schema.kdl");
+    if schema_path.is_file() {
+        md_db::schema::Schema::from_file(&schema_path).context("failed to load schema")
+    } else {
+        md_db::schema::Schema::from_str(dg_schemas::SCHEMA)
+            .context("failed to parse built-in schema")
+    }
+}
+
+fn load_org_config(dg_dir: &Path) -> Option<md_db::users::OrgConfig> {
+    let org_path = dg_dir.join(md_db::users::ORG_CONFIG_FILENAME);
+    if org_path.is_file() {
+        md_db::users::OrgConfig::from_file(&org_path).ok()
+    } else {
+        None
+    }
+}
+
+fn today_str() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = (secs / 86400) as i64;
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 fn check_lint(root: &Path) -> Result<()> {
