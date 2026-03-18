@@ -25,6 +25,27 @@ pub fn parse_gherkin_blocks(
     let mut features = Vec::new();
 
     for (i, content) in blocks.iter().enumerate() {
+        // Detect multiple Feature: lines in a single block (common mistake)
+        let feature_count = content
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim();
+                trimmed.starts_with("Feature:") || trimmed.starts_with("Feature :")
+            })
+            .count();
+
+        if feature_count > 1 {
+            return Err(GherkinError::ParseError {
+                filename: filename.to_string(),
+                message: format!(
+                    "found {feature_count} Feature: declarations in one code block — \
+                     each Feature must be in its own ```gherkin block"
+                ),
+                offset: 0,
+                block_index: i,
+            });
+        }
+
         let env = GherkinEnv::default();
         match gherkin::Feature::parse(content, env) {
             Ok(feature) => features.push(feature),
@@ -100,6 +121,23 @@ mod tests {
         assert_eq!(features.len(), 2);
         assert_eq!(features[0].name, "First");
         assert_eq!(features[1].name, "Second");
+    }
+
+    #[test]
+    fn rejects_multiple_features_in_one_block() {
+        let blocks = vec![
+            "Feature: First\n  Scenario: A\n    Given step\nFeature: Second\n  Scenario: B\n    Given other".to_string(),
+        ];
+        let err = parse_gherkin_blocks(&blocks, "test.md").unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("2 Feature:"),
+            "expected multi-feature error, got: {msg}"
+        );
+        assert!(
+            msg.contains("own ```gherkin block"),
+            "expected hint about separate blocks, got: {msg}"
+        );
     }
 
     #[test]

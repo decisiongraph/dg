@@ -4,7 +4,8 @@ use anyhow::{bail, Context, Result};
 use clap::Args;
 use md_db::document::Document;
 use md_db::graph;
-use md_db::schema::Schema;
+use md_db::schema::{FieldType, Schema};
+use md_db::users::OrgConfig;
 
 #[derive(Args)]
 pub struct SetArgs {
@@ -44,11 +45,13 @@ pub struct SetArgs {
     pub dry_run: bool,
 }
 
-pub fn run(root: &Path, schema: &Schema, args: &SetArgs) -> Result<()> {
+pub fn run(root: &Path, schema: &Schema, args: &SetArgs, org: Option<&OrgConfig>) -> Result<()> {
     let path = super::show::resolve_id_to_path(root, schema, &args.id)?;
     let original = std::fs::read_to_string(&path)?;
     let mut doc = Document::from_file(&path)?;
     let doc_id = graph::path_to_id(&path);
+
+    let type_def = schema.get_type_for_doc_id(&doc_id);
 
     // Field assignments
     for a in &args.assignments {
@@ -60,8 +63,8 @@ pub fn run(root: &Path, schema: &Schema, args: &SetArgs) -> Result<()> {
                         "warning: '{k}' is a single-ref relation — use '{k}={v}' instead of '{k}+={v}'"
                     );
                 }
-            } else if let Some(type_def) = schema.get_type_for_doc_id(&doc_id) {
-                if let Some(field) = type_def.fields.iter().find(|f| f.name == k) {
+            } else if let Some(td) = type_def {
+                if let Some(field) = td.fields.iter().find(|f| f.name == k) {
                     if !field.field_type.is_array() {
                         eprintln!(
                             "warning: '{k}' is a scalar field — use '{k}={v}' instead of '{k}+={v}'"
@@ -69,9 +72,22 @@ pub fn run(root: &Path, schema: &Schema, args: &SetArgs) -> Result<()> {
                     }
                 }
             }
-            doc.append_field_from_str(k, v);
-            eprintln!("{doc_id}: {k}+={v}");
+            // Support comma-separated values: tags+=a,b,c
+            let values: Vec<&str> = v.split(',').collect();
+            if values.len() > 1 {
+                for val in &values {
+                    let val = val.trim();
+                    warn_field_value(k, val, type_def, org);
+                    doc.append_field_from_str(k, val);
+                }
+                eprintln!("{doc_id}: {k}+={v}");
+            } else {
+                warn_field_value(k, v, type_def, org);
+                doc.append_field_from_str(k, v);
+                eprintln!("{doc_id}: {k}+={v}");
+            }
         } else if let Some((k, v)) = a.split_once('=') {
+            warn_field_value(k, v, type_def, org);
             doc.set_field_from_str(k, v);
             eprintln!("{doc_id}: {k}={v}");
         } else {
@@ -127,4 +143,42 @@ pub fn run(root: &Path, schema: &Schema, args: &SetArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Warn if a field value doesn't match its enum or is an unknown user.
+fn warn_field_value(
+    key: &str,
+    value: &str,
+    type_def: Option<&md_db::schema::TypeDef>,
+    org: Option<&OrgConfig>,
+) {
+    let td = match type_def {
+        Some(td) => td,
+        None => return,
+    };
+    let field = match td.fields.iter().find(|f| f.name == key) {
+        Some(f) => f,
+        None => return,
+    };
+    match &field.field_type {
+        FieldType::Enum(allowed) => {
+            if !allowed.contains(&value.to_string()) {
+                eprintln!(
+                    "warning: invalid value '{value}' for '{key}', allowed: {}",
+                    allowed.join(", ")
+                );
+            }
+        }
+        FieldType::User | FieldType::UserArray => {
+            if let Some(org) = org {
+                let handle = value.strip_prefix('@').unwrap_or(value);
+                if !org.users.contains_key(handle) {
+                    eprintln!(
+                        "warning: unknown user '{value}' for '{key}' — register with `dg team add-user {handle}`"
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
 }

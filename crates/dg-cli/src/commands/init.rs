@@ -119,6 +119,26 @@ pub fn run(
         fs::create_dir_all(root.join(dir)).with_context(|| format!("failed to create {dir}"))?;
     }
 
+    // Scaffold README.md with required sections if missing
+    let readme_path = root.join("README.md");
+    if !readme_path.exists() {
+        let project_name = root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Project");
+        let readme = format!(
+            "# {project_name}\n\n\
+             ## Architecture\n\n\
+             ```d2\n\
+             # Add your architecture diagram here\n\
+             ```\n\n\
+             ## License\n\n\
+             TODO: Add license information.\n"
+        );
+        fs::write(&readme_path, readme).context("failed to write README.md")?;
+        eprintln!("  README.md scaffolded");
+    }
+
     // Init git repo if not inside one
     if !is_inside_git_repo(root) {
         let status = Command::new("git")

@@ -8,6 +8,9 @@ use md_db::validation;
 
 #[derive(Args)]
 pub struct ValidateArgs {
+    /// Document ID to validate (e.g. ADR-001). Validates all if omitted.
+    pub doc_id: Option<String>,
+
     /// Glob pattern to filter files
     #[arg(long)]
     pub pattern: Option<String>,
@@ -27,11 +30,19 @@ pub fn run(
     users: Option<&OrgConfig>,
     args: &ValidateArgs,
 ) -> Result<()> {
-    let mut result = validation::validate_directory(root, schema, args.pattern.as_deref(), users)
+    // If a doc ID is given, convert it to a glob pattern
+    let pattern = if let Some(ref doc_id) = args.doc_id {
+        let id_lower = doc_id.to_lowercase();
+        Some(format!("**/{id_lower}*.md"))
+    } else {
+        args.pattern.clone()
+    };
+
+    let mut result = validation::validate_directory(root, schema, pattern.as_deref(), users)
         .context("validation failed")?;
 
-    // Run detected linters and test suites only when not filtering by pattern
-    if args.pattern.is_none() {
+    // Run detected linters and test suites only when not filtering by pattern or doc ID
+    if args.pattern.is_none() && args.doc_id.is_none() {
         let lint_results = validation::validate_service_linters(root);
         result.file_results.extend(lint_results);
         let test_results = validation::validate_service_tests(root);

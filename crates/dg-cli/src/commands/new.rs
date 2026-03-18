@@ -4,8 +4,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{bail, Context, Result};
 use clap::Args;
 use md_db::graph::DocGraph;
-use md_db::schema::{Schema, TypeDef};
+use md_db::schema::{FieldType, Schema, TypeDef};
 use md_db::template::{self, closest_match};
+use md_db::users::OrgConfig;
 
 #[derive(Args)]
 pub struct NewArgs {
@@ -117,6 +118,43 @@ fn parse_rest_args(rest: &[String], schema: &Schema, type_name: &str) -> Result<
     Ok(parsed)
 }
 
+/// Warn if any field values don't match their enum's allowed values.
+fn warn_invalid_enums(fields: &[(String, String)], type_def: &TypeDef) {
+    for (key, value) in fields {
+        if let Some(field) = type_def.fields.iter().find(|f| f.name == *key) {
+            if let FieldType::Enum(ref allowed) = field.field_type {
+                if !allowed.contains(value) {
+                    eprintln!(
+                        "warning: invalid value '{value}' for '{key}', allowed: {}",
+                        allowed.join(", ")
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Warn if any user-typed field values don't exist in org.kdl.
+fn warn_unknown_users(fields: &[(String, String)], type_def: &TypeDef, org: Option<&OrgConfig>) {
+    let org = match org {
+        Some(o) => o,
+        None => return,
+    };
+    for (key, value) in fields {
+        if let Some(field) = type_def.fields.iter().find(|f| f.name == *key) {
+            let is_user_field = matches!(field.field_type, FieldType::User | FieldType::UserArray);
+            if is_user_field {
+                let handle = value.strip_prefix('@').unwrap_or(value);
+                if !org.users.contains_key(handle) {
+                    eprintln!(
+                        "warning: unknown user '{value}' for '{key}' — register with `dg team add-user {handle}`"
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Warn if any user-supplied date fields are in the future.
 fn warn_future_dates(fields: &[(String, String)], type_def: &TypeDef) {
     let today = today_epoch_days();
@@ -177,6 +215,7 @@ pub fn run(
     schema: &Schema,
     args: &NewArgs,
     cache: &mut md_db::cache::DocCache,
+    org: Option<&OrgConfig>,
 ) -> Result<()> {
     let type_def = schema.get_type(&args.doc_type).ok_or_else(|| {
         let available: Vec<_> = schema
@@ -227,6 +266,12 @@ pub fn run(
 
     // Warn if any date fields are set to future dates
     warn_future_dates(&fields, type_def);
+
+    // Warn if any enum values are invalid
+    warn_invalid_enums(&fields, type_def);
+
+    // Warn if any user values are unknown
+    warn_unknown_users(&fields, type_def, org);
 
     let next_id = graph.next_id(canonical_type);
 
@@ -483,5 +528,23 @@ mod tests {
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("unknown field 'bogus'"));
         assert!(msg.contains("Known fields:"));
+    }
+
+    #[test]
+    fn test_warn_invalid_enums_no_panic() {
+        let schema = fixture_schema();
+        let type_def = schema.get_type("adr").unwrap();
+        // Valid value — should not panic or print
+        warn_invalid_enums(&[("status".into(), "accepted".into())], type_def);
+        // Invalid value — should warn (writes to stderr, no crash)
+        warn_invalid_enums(&[("status".into(), "open".into())], type_def);
+    }
+
+    #[test]
+    fn test_warn_unknown_users_no_panic() {
+        let schema = fixture_schema();
+        let type_def = schema.get_type("adr").unwrap();
+        // No org config — should not panic
+        warn_unknown_users(&[("author".into(), "anyone".into())], type_def, None);
     }
 }

@@ -144,7 +144,7 @@ fn run() -> Result<()> {
         Command::Site(args) => {
             commands::site::run(&root, &schema, users.as_ref(), &args, &mut cache)
         }
-        Command::New(args) => commands::new::run(&root, &schema, &args, &mut cache),
+        Command::New(args) => commands::new::run(&root, &schema, &args, &mut cache, users.as_ref()),
         Command::List(args) => commands::list::run(&root, &schema, &args, users.as_ref()),
         Command::Show(args) => commands::show::run(&root, &schema, &args, &mut cache),
         Command::Refs(args) => commands::refs::run(&root, &schema, &args, &mut cache),
@@ -155,7 +155,7 @@ fn run() -> Result<()> {
         }
         Command::Suggest(args) => commands::suggest::run(&root, &schema, &args),
         Command::Coverage(args) => commands::coverage::run(&root, &schema, &args),
-        Command::Set(args) => commands::set::run(&root, &schema, &args),
+        Command::Set(args) => commands::set::run(&root, &schema, &args, users.as_ref()),
         Command::Renumber(args) => commands::renumber::run(&root, &schema, &args),
         Command::Team(args) => commands::team::run(&args, &root, &schema, users),
         Command::Serve(args) => {
