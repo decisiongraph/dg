@@ -86,7 +86,7 @@
 	{:else if !service}
 		<div class="text-muted-foreground">Service not found: {slug}</div>
 	{:else}
-		<div class="flex items-center justify-between">
+		<div class="flex items-center justify-between mb-4 [&_nav]:mb-0">
 			<Breadcrumb
 				crumbs={[{ label: 'Services', href: '/' }, { label: service.name }]}
 			/>

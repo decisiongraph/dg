@@ -102,7 +102,7 @@
 	{:else if !team}
 		<div class="text-muted-foreground">Team not found: {teamId}</div>
 	{:else}
-		<div class="flex items-center justify-between">
+		<div class="flex items-center justify-between mb-4 [&_nav]:mb-0">
 			<Breadcrumb crumbs={[
 				{ label: 'Teams', href: '/org/teams' },
 				{ label: team.name }

@@ -122,7 +122,7 @@
 	{:else if !user}
 		<div class="text-muted-foreground">User not found: @{handle}</div>
 	{:else}
-		<div class="flex items-center justify-between">
+		<div class="flex items-center justify-between mb-4 [&_nav]:mb-0">
 			<Breadcrumb crumbs={[
 				{ label: 'People', href: '/org/users' },
 				{ label: user.name }

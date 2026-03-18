@@ -321,7 +321,7 @@
 	{:else if !doc}
 		<div class="text-muted-foreground">Document not found: {docId}</div>
 	{:else}
-		<div class="flex items-center justify-between">
+		<div class="flex items-center justify-between mb-4 [&_nav]:mb-0">
 			<Breadcrumb crumbs={[
 				{ label: typeDisplay, href: `/${typeSlug}` },
 				{ label: doc.id }
