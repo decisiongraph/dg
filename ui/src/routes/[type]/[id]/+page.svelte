@@ -341,6 +341,28 @@
 			</div>
 		{/if}
 
+		<!-- Proposed supersession banner — shown when a proposed doc claims to supersede this one -->
+		{#each doc.backlinks.filter((bl) => bl.relation === 'supersedes') as bl}
+			{@const supersedingDoc = $allDocs.find((d) => d.id === bl.id)}
+			{#if supersedingDoc?.status === 'proposed' || supersedingDoc?.status === 'draft'}
+				{@const refType = bl.id.split('-')[0]?.toLowerCase()}
+				{@const folder = typeFolder(refType)}
+				<div class="mb-6 rounded-xl border border-blue-300 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
+					<div class="flex items-start gap-2">
+						<span class="mt-0.5 text-lg leading-none">📋</span>
+						<div>
+							<p class="font-semibold text-foreground">
+								<a href="/{folder}/{bl.id.toLowerCase()}" class="text-primary underline hover:text-primary/80">{bl.id}</a> proposes to supersede this document
+							</p>
+							{#if supersedingDoc.title}
+								<p class="mt-1 text-sm text-muted-foreground">{supersedingDoc.title}</p>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/if}
+		{/each}
+
 		<!-- Superseded / Deprecated banner -->
 		{#if doc.status === 'superseded' || doc.status === 'deprecated'}
 			{@const supersededBy = doc.links?.superseded_by?.filter(Boolean) ?? []}
