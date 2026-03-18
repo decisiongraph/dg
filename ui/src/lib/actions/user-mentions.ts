@@ -68,33 +68,37 @@ export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): s
 	const ini = initials(user.name || handle);
 	const displayName = esc(user.name || handle);
 	const isExternal = user.kind === 'external';
+	const isDeparted = user.status === 'departed';
 	const teams = teamNames(user.teams, org);
 
 	// Badge (link wrapping the initials circle)
+	const departedFilter = isDeparted ? ' opacity-50 grayscale' : '';
 	const badge = user.avatar_url
-		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-6 h-6 shrink-0 align-middle" />`
-		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-6 h-6 text-[10px] ${bg} ${fg}">${ini}</span>`;
+		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-6 h-6 shrink-0 align-middle${departedFilter}" />`
+		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-6 h-6 text-[10px] ${bg} ${fg}${departedFilter}">${ini}</span>`;
 
 	// Hover card content
 	const avatarLarge = user.avatar_url
-		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-10 h-10 shrink-0" />`
-		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm ${bg} ${fg} shrink-0">${ini}</span>`;
+		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-10 h-10 shrink-0${departedFilter}" />`
+		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm ${bg} ${fg} shrink-0${departedFilter}">${ini}</span>`;
 
 	const titleLine = user.title ? `<span class="text-xs text-muted-foreground">${esc(user.title)}</span>` : '';
 	const teamsLine =
 		teams.length > 0
 			? `<span class="text-xs text-muted-foreground">${esc(teams.join(', '))}</span>`
 			: '';
-	const externalBadge = isExternal
-		? `<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">External</span>`
-		: '';
+	const statusBadge = isDeparted
+		? `<span class="inline-flex items-center rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">Departed</span>`
+		: isExternal
+			? `<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">External</span>`
+			: '';
 
 	const hoverContent = `<span class="flex items-center gap-2">
 			${avatarLarge}
 			<span class="flex flex-col min-w-0">
 				<span class="flex items-center gap-1.5">
 					<span class="font-medium text-sm truncate">${displayName}</span>
-					${externalBadge}
+					${statusBadge}
 				</span>
 				<span class="text-xs text-muted-foreground truncate">@${esc(handle)}</span>
 			</span>

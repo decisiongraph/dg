@@ -23,6 +23,8 @@
 			.filter(Boolean) ?? []
 	);
 	const isExternal = $derived(user?.kind === 'external');
+	const isDeparted = $derived(user?.status === 'departed');
+	const departedClass = $derived(isDeparted ? 'opacity-50 grayscale' : '');
 	const userHref = $derived(`/org/users/${handle}`);
 
 	let triggerEl: HTMLElement | undefined = $state();
@@ -45,11 +47,11 @@
 		<img
 			src={avatarUrl}
 			alt={name}
-			class="rounded-full object-cover {sizeClass}"
+			class="rounded-full object-cover {sizeClass} {departedClass}"
 		/>
 	{:else}
 		<span
-			class="inline-flex items-center justify-center rounded-full font-medium {sizeClass} {colorClass}"
+			class="inline-flex items-center justify-center rounded-full font-medium {sizeClass} {colorClass} {departedClass}"
 		>
 			{ini}
 		</span>
@@ -58,14 +60,16 @@
 	<span class="user-hovercard" style="display:none;">
 		<span class="flex items-center gap-2">
 			{#if avatarUrl}
-				<img src={avatarUrl} alt={name} class="rounded-full object-cover w-10 h-10 shrink-0" />
+				<img src={avatarUrl} alt={name} class="rounded-full object-cover w-10 h-10 shrink-0 {departedClass}" />
 			{:else}
-				<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm {colorClass} shrink-0">{ini}</span>
+				<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm {colorClass} shrink-0 {departedClass}">{ini}</span>
 			{/if}
 			<span class="flex flex-col min-w-0">
 				<span class="flex items-center gap-1.5">
 					<span class="font-medium text-sm truncate">{name}</span>
-					{#if isExternal}
+					{#if isDeparted}
+						<span class="inline-flex items-center rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">Departed</span>
+					{:else if isExternal}
 						<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">External</span>
 					{/if}
 				</span>
