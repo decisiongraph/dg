@@ -16,7 +16,7 @@ pub struct GeminiArgs {
 
 pub fn run(args: &GeminiArgs) -> Result<()> {
     let mut cmd = Command::new("gemini");
-    cmd.arg("--append-system-prompt").arg(DG_SYSTEM_PROMPT);
+    cmd.arg("-i").arg(DG_SYSTEM_PROMPT);
 
     // Prepend the directory of this dg binary to PATH so hooks resolve to the
     // same binary (and sibling binaries) regardless of system PATH.

@@ -86,16 +86,18 @@ export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): s
 			? `<span class="text-xs text-muted-foreground">${esc(teams.join(', '))}</span>`
 			: '';
 	const externalBadge = isExternal
-		? `<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium">External</span>`
+		? `<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">External</span>`
 		: '';
 
 	const hoverContent = `<span class="flex items-center gap-2">
 			${avatarLarge}
 			<span class="flex flex-col min-w-0">
-				<span class="font-medium text-sm truncate">${displayName}</span>
+				<span class="flex items-center gap-1.5">
+					<span class="font-medium text-sm truncate">${displayName}</span>
+					${externalBadge}
+				</span>
 				<span class="text-xs text-muted-foreground truncate">@${esc(handle)}</span>
 			</span>
-			${externalBadge}
 		</span>
 		${titleLine}
 		${teamsLine}`;

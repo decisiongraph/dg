@@ -16,6 +16,7 @@ const GREEN_BG: &str = "\x1b[1;30;42m";
 const YELLOW_BG: &str = "\x1b[1;30;43m";
 const RED_BG: &str = "\x1b[1;30;41m";
 const GRAY_BG: &str = "\x1b[1;37;100m";
+const BLUE_BG: &str = "\x1b[1;37;44m";
 
 #[derive(Args)]
 pub struct SuggestArgs {
@@ -142,8 +143,9 @@ fn format_status_pill(status: &str) -> String {
         "accepted" | "active" | "approved" | "resolved" | "completed" | "delivered" => GREEN_BG,
         "proposed" | "validating" | "draft" | "review" | "pursuing" | "exploring"
         | "investigating" | "identified" | "open" => YELLOW_BG,
-        "deprecated" | "rejected" | "superseded" | "ongoing" | "declined" | "parked"
-        | "mitigated" | "retired" => RED_BG,
+        "parked" => BLUE_BG,
+        "deprecated" | "rejected" | "superseded" | "ongoing" | "declined" | "mitigated"
+        | "retired" => RED_BG,
         _ => GRAY_BG,
     };
     format!("{bg} {upper} {RESET}")

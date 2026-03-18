@@ -37,6 +37,7 @@
 		deprecated: 'bg-red-100 text-red-800 border-red-200',
 		sunset: 'bg-red-100 text-red-800 border-red-200',
 		superseded: 'bg-slate-100 text-slate-700 border-slate-200',
+		parked: 'bg-blue-100 text-blue-800 border-blue-200',
 		departed: 'bg-red-100 text-red-800 border-red-200'
 	};
 

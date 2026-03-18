@@ -293,8 +293,9 @@ fn status_pill(status: &str) -> String {
         | "implemented" => GREEN_BG,
         "proposed" | "validating" | "draft" | "review" | "pursuing" | "exploring"
         | "investigating" | "identified" | "open" => YELLOW_BG,
-        "deprecated" | "rejected" | "superseded" | "ongoing" | "declined" | "parked"
-        | "mitigated" | "retired" => RED_BG,
+        "parked" => BLUE_BG,
+        "deprecated" | "rejected" | "superseded" | "ongoing" | "declined" | "mitigated"
+        | "retired" => RED_BG,
         _ => GRAY_BG,
     };
     format!("{bg} {upper} {RESET}")

@@ -63,12 +63,14 @@
 				<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm {colorClass} shrink-0">{ini}</span>
 			{/if}
 			<span class="flex flex-col min-w-0">
-				<span class="font-medium text-sm truncate">{name}</span>
+				<span class="flex items-center gap-1.5">
+					<span class="font-medium text-sm truncate">{name}</span>
+					{#if isExternal}
+						<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium shrink-0">External</span>
+					{/if}
+				</span>
 				<span class="text-xs text-muted-foreground truncate">@{handle}</span>
 			</span>
-			{#if isExternal}
-				<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-1.5 py-0.5 text-[10px] font-medium">External</span>
-			{/if}
 		</span>
 		{#if user?.title}
 			<span class="text-xs text-muted-foreground">{user.title}</span>

@@ -41,7 +41,7 @@
 		sunset: 'red',
 		superseded: 'slate',
 		retired: 'red',
-		parked: 'slate',
+		parked: 'blue',
 		postmortem: 'slate'
 	};
 
