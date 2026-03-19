@@ -107,7 +107,7 @@
 				{ label: 'Teams', href: '/org/teams' },
 				{ label: team.name }
 			]} />
-			<SourceFileLink path=".dg/org.kdl" />
+			<SourceFileLink path={team.source_path ?? '.dg/org.kdl'} />
 		</div>
 
 		<div class="space-y-1">

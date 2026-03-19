@@ -123,6 +123,8 @@ pub struct TeamJson {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body_html: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub extra: BTreeMap<String, String>,
 }
@@ -664,7 +666,7 @@ pub fn build_org_json(
                 .map(|(child_id, _)| child_id.clone())
                 .collect();
 
-            let (description, body_html) = read_team_doc(project_dir, id);
+            let (description, body_html, source_path) = read_team_doc(project_dir, id);
 
             (
                 id.clone(),
@@ -678,6 +680,7 @@ pub fn build_org_json(
                     status: t.status.to_string(),
                     description,
                     body_html,
+                    source_path,
                     extra: t.extra.clone(),
                 },
             )
@@ -730,18 +733,22 @@ pub fn build_org_json(
 }
 
 /// Read `docs/teams/{id}.md` and return (first_paragraph, full_html).
-fn read_team_doc(project_dir: &Path, team_id: &str) -> (Option<String>, Option<String>) {
-    let path = project_dir.join("docs/teams").join(format!("{team_id}.md"));
+fn read_team_doc(
+    project_dir: &Path,
+    team_id: &str,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let rel = format!("docs/teams/{team_id}.md");
+    let path = project_dir.join(&rel);
     let raw = match std::fs::read_to_string(&path) {
         Ok(s) => s,
-        Err(_) => return (None, None),
+        Err(_) => return (None, None, None),
     };
 
     let body = strip_yaml_frontmatter(&raw);
     let html = render_markdown_to_html(body);
     let desc = extract_first_paragraph(body);
 
-    (desc, Some(html))
+    (desc, Some(html), Some(rel))
 }
 
 /// Strip optional YAML frontmatter (--- delimited) from markdown content.

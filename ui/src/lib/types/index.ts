@@ -63,6 +63,7 @@ export interface TeamDef {
 	status: string;
 	description?: string;
 	body_html?: string;
+	source_path?: string;
 	extra?: Record<string, string>;
 }
 
