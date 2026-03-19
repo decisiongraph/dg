@@ -49,14 +49,14 @@ pub fn run(
         println!("✓ Site built to {}", output.display());
     }
 
-    // Find available port (auto-increment if needed)
-    let actual_port = find_available_port(&args.host, args.port)?;
-    let addr = format!("{}:{}", args.host, actual_port);
+    // Start HTTP server — try requested port, auto-increment if busy
+    let (server, actual_port) = bind_server(&args.host, args.port)?;
 
     if actual_port != args.port {
         println!("Port {} in use, using {} instead", args.port, actual_port);
     }
 
+    let addr = format!("{}:{}", args.host, actual_port);
     println!("Serving at http://{}", addr);
     println!("Press Ctrl+C to stop\n");
 
@@ -70,8 +70,8 @@ pub fn run(
     let rebuild_flag = Arc::new(Mutex::new(false));
     start_watcher(root, rebuild_flag.clone())?;
 
-    // Start HTTP server in main thread
-    serve_directory(&output, &addr, root, schema, users, cache, rebuild_flag)?;
+    // Serve HTTP requests
+    serve_with_server(server, &output, root, schema, users, cache, rebuild_flag)?;
 
     Ok(())
 }
@@ -177,20 +177,15 @@ fn start_watcher(root: &Path, rebuild_flag: Arc<Mutex<bool>>) -> Result<()> {
     Ok(())
 }
 
-fn serve_directory(
+fn serve_with_server(
+    server: Arc<tiny_http::Server>,
     output: &Path,
-    addr: &str,
     root: &Path,
     _schema: &Schema,
     _users: Option<&OrgConfig>,
     _cache: &mut md_db::cache::DocCache,
     rebuild_flag: Arc<Mutex<bool>>,
 ) -> Result<()> {
-    let server = Arc::new(
-        tiny_http::Server::http(addr)
-            .map_err(|e| anyhow::anyhow!("Failed to start HTTP server: {}", e))?,
-    );
-
     let output = output.to_path_buf();
     let root = root.to_path_buf();
 
@@ -399,11 +394,12 @@ fn percent_decode(input: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| input.to_string())
 }
 
-fn find_available_port(host: &str, start_port: u16) -> Result<u16> {
+fn bind_server(host: &str, start_port: u16) -> Result<(Arc<tiny_http::Server>, u16)> {
     for port in start_port..start_port + 10 {
         let addr = format!("{}:{}", host, port);
-        if tiny_http::Server::http(&addr).is_ok() {
-            return Ok(port);
+        match tiny_http::Server::http(&addr) {
+            Ok(server) => return Ok((Arc::new(server), port)),
+            Err(_) => continue,
         }
     }
     anyhow::bail!(
