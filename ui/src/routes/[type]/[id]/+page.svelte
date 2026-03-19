@@ -441,7 +441,7 @@
 
 					<!-- Metadata rows -->
 					{#if peopleEntries.length > 0}
-						<div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+						<div class="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-sm text-muted-foreground">
 							{#each peopleEntries as [role, handles]}
 								<span class="inline-flex items-center gap-1.5">
 									<span class="capitalize">{role.replace(/_/g, ' ')}:</span>
@@ -458,7 +458,7 @@
 						</div>
 					{/if}
 					{#if metaItems.length > 0 || badgeMeta.length > 0}
-						<div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+						<div class="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-sm text-muted-foreground">
 							{#each metaItems as item}
 								<span class="inline-flex items-center gap-1">
 									<span class="capitalize">{item.label}:</span>
