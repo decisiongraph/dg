@@ -1296,7 +1296,7 @@ type "readme" folder="." max_count=1 singleton=#true {
         std::fs::create_dir_all(tmp.join("infra/database")).unwrap();
         std::fs::write(
             tmp.join("infra/database/README.md"),
-            "---\nowner: ops-team\nstatus: live\nhas_linter: true\nhas_tests: true\n---\n# Database\n",
+            "---\nowner: ops-team\nstatus: live\nhas_linter: true\nhas_tests: true\n---\n# Database\n\n## Architecture\n\n```mermaid\ngraph LR\n  App --> DB[(PostgreSQL)]\n  App --> Cache[(Redis)]\n  Worker --> DB\n  Worker --> Queue\n```\n",
         )
         .unwrap();
 

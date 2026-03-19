@@ -698,6 +698,9 @@ pub(crate) fn validate_service_readmes(dir: &Path, file_results: &mut Vec<FileRe
                 });
             }
 
+            // SV006: Architecture section must contain a mermaid or d2 diagram (≥5 lines)
+            validate_architecture_diagram(&doc.body, &readme, kind_dir, folder_name, file_results);
+
             // SV008: EOL version warnings (only when avatars/ureq feature is enabled)
             #[cfg(feature = "avatars")]
             {
@@ -737,6 +740,93 @@ pub(crate) fn validate_service_readmes(dir: &Path, file_results: &mut Vec<FileRe
                 }
             }
         }
+    }
+}
+
+/// Validate that an ## Architecture section exists and contains a mermaid/d2 diagram with ≥5 lines.
+fn validate_architecture_diagram(
+    body: &str,
+    readme_path: &Path,
+    kind_dir: &str,
+    folder_name: &str,
+    file_results: &mut Vec<FileResult>,
+) {
+    let rel = format!("{kind_dir}/{folder_name}/README.md");
+    let lines: Vec<&str> = body.lines().collect();
+
+    // Find ## Architecture heading
+    let arch_start = lines.iter().position(|l| {
+        let trimmed = l.trim().to_lowercase();
+        trimmed == "## architecture" || trimmed.starts_with("## architecture ")
+    });
+
+    let Some(arch_idx) = arch_start else {
+        file_results.push(FileResult {
+            path: readme_path.display().to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Warning,
+                code: "SV006".into(),
+                message: format!("{rel} is missing an ## Architecture section"),
+                location: rel,
+                hint: Some(
+                    "add an ## Architecture section with a mermaid or d2 diagram showing inputs, outputs, and integrations".into(),
+                ),
+            }],
+        });
+        return;
+    };
+
+    // Find the end of the Architecture section (next ## heading or end of file)
+    let arch_end = lines[arch_idx + 1..]
+        .iter()
+        .position(|l| l.starts_with("## "))
+        .map(|p| arch_idx + 1 + p)
+        .unwrap_or(lines.len());
+
+    let section_lines = &lines[arch_idx + 1..arch_end];
+
+    // Look for a fenced code block with mermaid or d2 language
+    let mut in_diagram = false;
+    let mut diagram_lines = 0usize;
+    let mut has_diagram = false;
+
+    for line in section_lines {
+        let trimmed = line.trim();
+        if !in_diagram && (trimmed.starts_with("```mermaid") || trimmed.starts_with("```d2")) {
+            in_diagram = true;
+            diagram_lines = 0;
+            continue;
+        }
+        if in_diagram {
+            if trimmed == "```" {
+                if diagram_lines >= 5 {
+                    has_diagram = true;
+                }
+                in_diagram = false;
+            } else {
+                // Count non-empty lines
+                if !trimmed.is_empty() {
+                    diagram_lines += 1;
+                }
+            }
+        }
+    }
+
+    if !has_diagram {
+        file_results.push(FileResult {
+            path: readme_path.display().to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Warning,
+                code: "SV006".into(),
+                message: format!(
+                    "{rel} ## Architecture section must contain a mermaid or d2 diagram with at least 5 lines"
+                ),
+                location: rel,
+                hint: Some(
+                    "add a ```mermaid or ```d2 fenced code block showing service inputs, outputs, and integrations".into(),
+                ),
+            }],
+        });
     }
 }
 
