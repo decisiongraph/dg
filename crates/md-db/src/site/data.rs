@@ -539,7 +539,7 @@ pub fn build_docs_json(
                 })
                 .unwrap_or_default();
 
-            let body_html = render_markdown_to_html(&doc.body);
+            let body_html = strip_leading_h1(&render_markdown_to_html(&doc.body), &title);
 
             let open_questions = crate::questions::extract_questions(doc)
                 .iter()
@@ -749,6 +749,40 @@ fn read_team_doc(
     let desc = extract_first_paragraph(body);
 
     (desc, Some(html), Some(rel))
+}
+
+/// Strip the first `<h1>` from rendered HTML if its text matches the document title.
+/// This prevents the title from appearing twice (once in the card header, once in the body).
+fn strip_leading_h1(html: &str, title: &str) -> String {
+    let trimmed = html.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("<h1") {
+        // Find closing </h1>
+        if let Some(end) = rest.find("</h1>") {
+            // Extract text content between > and </h1>, stripping any inner tags
+            if let Some(gt) = rest[..end].find('>') {
+                let inner = &rest[gt + 1..end];
+                // Strip HTML tags to get plain text
+                let plain: String = inner
+                    .split('<')
+                    .enumerate()
+                    .map(|(i, part)| {
+                        if i == 0 {
+                            part.to_string()
+                        } else {
+                            part.split_once('>')
+                                .map(|(_, t)| t.to_string())
+                                .unwrap_or_default()
+                        }
+                    })
+                    .collect::<String>();
+                if plain.trim() == title.trim() {
+                    let after = &rest[end + 5..]; // skip past </h1>
+                    return after.trim_start_matches(['\r', '\n']).to_string();
+                }
+            }
+        }
+    }
+    html.to_string()
 }
 
 /// Strip optional YAML frontmatter (--- delimited) from markdown content.
@@ -1598,6 +1632,7 @@ pub fn generate_data_files(
             .frontmatter
             .as_ref()
             .and_then(|fm| fm.get_display("title"))
+            .or_else(|| doc.title())
             .unwrap_or_else(|| id.clone());
         id_to_title.insert(id.clone(), title);
     }
