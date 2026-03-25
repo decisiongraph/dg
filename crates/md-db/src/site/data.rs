@@ -775,7 +775,13 @@ fn strip_leading_h1(html: &str, title: &str) -> String {
                         }
                     })
                     .collect::<String>();
-                if plain.trim() == title.trim() {
+                let decoded = plain
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&quot;", "\"")
+                    .replace("&#39;", "'");
+                if decoded.trim() == title.trim() {
                     let after = &rest[end + 5..]; // skip past </h1>
                     return after.trim_start_matches(['\r', '\n']).to_string();
                 }
@@ -2262,6 +2268,17 @@ Setup.
 <p>Content</p>"##;
         let result = strip_leading_h1(html, "My Title");
         assert!(!result.contains("<h1>"), "H1 should be stripped: {result}");
+        assert!(result.contains("<p>Content</p>"));
+    }
+
+    #[test]
+    fn strip_leading_h1_with_html_entities() {
+        let html = "<h1>Migrate to Elixir &amp; Phoenix</h1>\n<p>Content</p>";
+        let result = strip_leading_h1(html, "Migrate to Elixir & Phoenix");
+        assert!(
+            !result.contains("<h1>"),
+            "H1 with &amp; should be stripped: {result}"
+        );
         assert!(result.contains("<p>Content</p>"));
     }
 
