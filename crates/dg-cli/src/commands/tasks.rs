@@ -24,7 +24,7 @@ const DONE_STATUSES: &[&str] = &[
 
 #[derive(Args)]
 pub struct TasksArgs {
-    /// Filter by document type (adr, pol, opp, inc, spec)
+    /// Filter by document type (e.g. adr, pol, opp, inc, spec, proc)
     #[arg(long = "type", short = 't')]
     pub doc_type: Option<String>,
 

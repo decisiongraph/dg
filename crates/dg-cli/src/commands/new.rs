@@ -10,7 +10,7 @@ use md_db::users::OrgConfig;
 
 #[derive(Args)]
 pub struct NewArgs {
-    /// Document type (adr, pol, opp, inc, spec)
+    /// Document type (e.g. adr, pol, opp, inc, spec, proc)
     #[arg(name = "TYPE")]
     pub doc_type: String,
 

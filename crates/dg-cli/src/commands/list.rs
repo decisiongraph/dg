@@ -14,7 +14,7 @@ use md_db::users::{OrgConfig, ORG_CONFIG_FILENAME};
 
 #[derive(Args)]
 pub struct ListArgs {
-    /// Filter by document type (adr, pol, opp, inc, spec)
+    /// Filter by document type (e.g. adr, pol, opp, inc, spec, proc)
     #[arg(long = "type", short = 't')]
     pub doc_type: Option<String>,
 
@@ -101,6 +101,7 @@ fn build_table_rows(root: &Path, entries: &[&ListEntry]) -> Vec<Vec<String>> {
                 .as_ref()
                 .and_then(|f| f.get("title"))
                 .and_then(|v| v.as_str())
+                .or(e.heading.as_deref())
                 .unwrap_or("-");
             let document = format!("{id}: {title}");
             let status = fm
@@ -172,16 +173,7 @@ pub fn run(root: &Path, schema: &Schema, args: &ListArgs, users: Option<&OrgConf
             Ok((None, body)) => (None, body),
             Err(_) => (None, content.clone()),
         };
-        let has_type = fm_json
-            .as_ref()
-            .and_then(|f| f.get("type"))
-            .and_then(|v| v.as_str())
-            .is_some_and(|t| !t.is_empty());
-        let heading = if has_type {
-            None
-        } else {
-            ast_util::first_heading_text(&body)
-        };
+        let heading = ast_util::first_heading_text(&body);
         entries.push(ListEntry {
             path: path
                 .strip_prefix(root)

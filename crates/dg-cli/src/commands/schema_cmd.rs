@@ -6,7 +6,7 @@ use md_db::schema::{FieldType, Schema};
 
 #[derive(Args)]
 pub struct SchemaArgs {
-    /// Document type to show (e.g. adr, inc, opp, pol, spec)
+    /// Document type to show (e.g. adr, inc, opp, pol, spec, proc)
     #[arg(name = "TYPE")]
     pub doc_type: Option<String>,
 
