@@ -1,12 +1,13 @@
 ---
-title: Unified Grafana Dashboard for All Services
 status: implemented
 priority: should
 author: eve
 date: 2025-04-10
 tags: [monitoring, grafana, observability]
 implements: [OPP-003]
+title: Unified Grafana Dashboard for All Services
 ---
+
 
 ## Story
 
@@ -49,3 +50,4 @@ Feature: Unified service health dashboard
 - Alertmanager rules migrated from Datadog monitors with matching thresholds
 - PagerDuty integration tested with synthetic alerts before go-live
 - Runbook links embedded in each alert annotation
+

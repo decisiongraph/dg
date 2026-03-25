@@ -1,13 +1,14 @@
 ---
-title: Real-time Document Sync via WebSocket
 status: approved
 priority: must
 author: alice
 date: 2025-04-15
 tags: [collaboration, websocket, crdt]
-implements: [OPP-001]
 depends_on: [ADR-001]
+implements: [OPP-001]
+title: Real-time Document Sync via WebSocket
 ---
+
 
 ## Story
 
@@ -59,3 +60,4 @@ Feature: Real-time document synchronization
 
 - [ ] **Cursor presence**: Should we show other users' cursor positions in the MVP?
 - [ ] **Undo scope**: Does Ctrl+Z undo only local changes or all recent changes?
+

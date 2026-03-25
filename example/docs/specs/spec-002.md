@@ -1,13 +1,14 @@
 ---
-title: Zero-downtime PostgreSQL Migration to Bare Metal
 status: review
 priority: must
 author: eve
 date: 2025-07-01
 tags: [infrastructure, database, migration]
-implements: [OPP-002]
 depends_on: [ADR-002]
+implements: [OPP-002]
+title: Zero-downtime PostgreSQL Migration to Bare Metal
 ---
+
 
 ## Story
 
@@ -53,3 +54,4 @@ Feature: Zero-downtime database migration
 - Rollback procedure tested and documented, executable within 5 minutes
 - PgBouncer configuration updated for bare-metal connection parameters
 - Monitoring dashboards show replication lag, connection count, and query latency for both environments
+

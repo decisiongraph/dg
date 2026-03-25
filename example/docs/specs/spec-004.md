@@ -1,13 +1,14 @@
 ---
-title: Role-based Access Control for Documents
 status: proposed
 priority: must
 author: alice
 date: 2025-06-10
 tags: [security, access-control, permissions]
-implements: [OPP-001]
 depends_on: [ADR-001]
+implements: [OPP-001]
+title: Role-based Access Control for Documents
 ---
+
 
 ## Story
 
@@ -66,3 +67,4 @@ Feature: Role-based access control for documents
 
 - [ ] **Guest links**: Should we support time-limited shareable links for external reviewers?
 - [ ] **Inheritance**: Should sub-teams inherit parent-team roles automatically?
+
