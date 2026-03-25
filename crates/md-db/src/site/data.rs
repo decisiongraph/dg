@@ -1794,6 +1794,9 @@ struct CodeRefItemJson {
     context_before: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     context_after: Vec<String>,
+    /// Full URL override for files inside git submodules.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1837,6 +1840,9 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
             None => (None, None),
         };
 
+    // Detect submodule URLs for resolving file links
+    let submodules = crate::code_refs::detect_submodule_urls(project_dir);
+
     let refs = cache
         .index
         .iter()
@@ -1844,12 +1850,26 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
             let code = doc_refs
                 .code
                 .iter()
-                .map(|r| CodeRefItemJson {
-                    file: r.file.clone(),
-                    line: r.line,
-                    text: r.text.clone(),
-                    context_before: r.context_before.clone(),
-                    context_after: r.context_after.clone(),
+                .map(|r| {
+                    // Check if file is inside a git submodule
+                    let file_url = submodules
+                        .iter()
+                        .find_map(|(sm_path, (sm_url, sm_branch))| {
+                            r.file.strip_prefix(sm_path).map(|rest| {
+                                let rest = rest.strip_prefix('/').unwrap_or(rest);
+                                let is_gitlab = sm_url.contains("gitlab");
+                                let blob = if is_gitlab { "/-/blob/" } else { "/blob/" };
+                                format!("{sm_url}{blob}{sm_branch}/{rest}")
+                            })
+                        });
+                    CodeRefItemJson {
+                        file: r.file.clone(),
+                        line: r.line,
+                        text: r.text.clone(),
+                        context_before: r.context_before.clone(),
+                        context_after: r.context_after.clone(),
+                        file_url,
+                    }
                 })
                 .collect();
             let commits = doc_refs
@@ -2218,5 +2238,37 @@ Setup.
         assert!(result.contains("# generate docs"));
         assert!(result.contains("## Dev"));
         assert!(result.contains("Setup."));
+    }
+
+    #[test]
+    fn strip_leading_h1_matching() {
+        let html = "<h1>My Title</h1>\n<h2>Section</h2>\n<p>Content</p>";
+        let result = strip_leading_h1(html, "My Title");
+        assert!(!result.contains("<h1>"));
+        assert!(result.contains("<h2>Section</h2>"));
+    }
+
+    #[test]
+    fn strip_leading_h1_non_matching() {
+        let html = "<h1>Different Title</h1>\n<p>Content</p>";
+        let result = strip_leading_h1(html, "My Title");
+        assert!(result.contains("<h1>Different Title</h1>"));
+    }
+
+    #[test]
+    fn strip_leading_h1_with_anchor() {
+        // comrak renders H1 with id and anchor link inside
+        let html = r##"<h1><a href="#my-title" aria-hidden="true"></a>My Title</h1>
+<p>Content</p>"##;
+        let result = strip_leading_h1(html, "My Title");
+        assert!(!result.contains("<h1>"), "H1 should be stripped: {result}");
+        assert!(result.contains("<p>Content</p>"));
+    }
+
+    #[test]
+    fn strip_leading_h1_preserves_non_h1_start() {
+        let html = "<p>Intro</p>\n<h1>Title</h1>";
+        let result = strip_leading_h1(html, "Title");
+        assert_eq!(result, html, "should not strip H1 that isn't first element");
     }
 }

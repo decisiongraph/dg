@@ -215,7 +215,10 @@
 			map.set(ref.file, entries);
 		}
 
-		return [...map.entries()].map(([file, refs]) => {
+		return [...map.entries()].map(([file, refs]): { file: string; blocks: any[]; baseFileUrl: string } => {
+			// Use submodule file_url from any ref, else fall back to prefix
+			const submoduleUrl = refs.find((r) => r.file_url)?.file_url;
+			const baseFileUrl = submoduleUrl ?? (fileUrlPrefix ? `${fileUrlPrefix}${file}` : '');
 			// Build a sorted list of all lines (with content) that should appear
 			// Each ref contributes: context_before lines + match line + context_after lines
 			type LineEntry = { lineNum: number; text: string; isMatch: boolean };
@@ -249,7 +252,7 @@
 				blocks.push(sorted[i]);
 			}
 
-			return { file, blocks };
+			return { file, blocks, baseFileUrl };
 		});
 	});
 
@@ -582,8 +585,8 @@
 				{#each codeRefsByFile as fileGroup}
 					<div class="rounded-lg border bg-card overflow-hidden">
 						<div class="bg-muted/50 px-4 py-2 border-b flex items-center gap-2">
-							{#if fileUrlPrefix}
-								<a href="{fileUrlPrefix}{fileGroup.file}" target="_blank" rel="noopener noreferrer"
+							{#if fileGroup.baseFileUrl}
+								<a href={fileGroup.baseFileUrl} target="_blank" rel="noopener noreferrer"
 									class="text-xs font-mono text-primary hover:underline">{fileGroup.file}</a>
 							{:else}
 								<span class="text-xs font-mono text-primary">{fileGroup.file}</span>
@@ -598,8 +601,8 @@
 									</div>
 								{:else}
 									<div class="flex items-baseline border-b border-border/30 last:border-0 {block.isMatch ? 'bg-yellow-50 dark:bg-yellow-950/20' : 'hover:bg-muted/30'}">
-										{#if fileUrlPrefix && block.isMatch}
-											<a href="{fileUrlPrefix}{fileGroup.file}#L{block.lineNum}" target="_blank" rel="noopener noreferrer"
+										{#if fileGroup.baseFileUrl && block.isMatch}
+											<a href="{fileGroup.baseFileUrl}#L{block.lineNum}" target="_blank" rel="noopener noreferrer"
 												class="shrink-0 w-14 text-right pr-3 py-1.5 text-xs font-mono text-muted-foreground hover:text-primary select-none no-underline">{block.lineNum}</a>
 										{:else}
 											<span class="shrink-0 w-14 text-right pr-3 py-1.5 text-xs font-mono text-muted-foreground select-none">{block.lineNum}</span>

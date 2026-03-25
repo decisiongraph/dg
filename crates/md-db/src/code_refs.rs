@@ -544,7 +544,21 @@ pub fn scan_commit_refs(_root: &Path, _schema: &Schema, _cache: &mut CodeRefCach
 #[cfg(feature = "git")]
 pub fn detect_repo_web_url(root: &Path) -> Option<(String, String)> {
     let repo = git2::Repository::discover(root).ok()?;
-    let remote = repo.find_remote("origin").ok()?;
+    let remotes = repo.remotes().ok()?;
+    let remote_name = if remotes.iter().any(|n| n == Some("origin")) {
+        "origin"
+    } else if remotes.len() == 1 {
+        remotes.get(0)?
+    } else {
+        if remotes.len() > 1 {
+            eprintln!(
+                "warning: repo has {} remotes and none is 'origin', skipping web URL detection",
+                remotes.len()
+            );
+        }
+        return None;
+    };
+    let remote = repo.find_remote(remote_name).ok()?;
     let url_str = remote.url()?;
     let web_url = git_remote_to_web_url(url_str)?;
     let branch = repo
@@ -576,6 +590,72 @@ fn git_remote_to_web_url(url: &str) -> Option<String> {
         return Some(clean.to_string());
     }
     None
+}
+
+/// Detect git submodules and their web-browsable URLs.
+/// Returns a map of `submodule_path → (web_base_url, branch)`.
+#[cfg(feature = "git")]
+pub fn detect_submodule_urls(root: &Path) -> std::collections::HashMap<String, (String, String)> {
+    let mut result = std::collections::HashMap::new();
+    let repo = match git2::Repository::discover(root) {
+        Ok(r) => r,
+        Err(_) => return result,
+    };
+    let submodules = match repo.submodules() {
+        Ok(s) => s,
+        Err(_) => return result,
+    };
+    for sm in &submodules {
+        let sm_path = sm.path().to_string_lossy().to_string();
+        let url_str = match sm.url() {
+            Some(u) => u,
+            None => continue,
+        };
+        let web_url = match git_remote_to_web_url(url_str) {
+            Some(u) => u,
+            None => continue,
+        };
+        // Detect default branch from remote HEAD. Try "origin" first, then
+        // fall back to the sole remote if there's exactly one.
+        let branch = sm
+            .open()
+            .ok()
+            .and_then(|r| {
+                let remotes = r.remotes().ok()?;
+                let remote_name = if remotes.iter().any(|n| n == Some("origin")) {
+                    "origin".to_string()
+                } else if remotes.len() == 1 {
+                    remotes.get(0)?.to_string()
+                } else {
+                    if remotes.len() > 1 {
+                        eprintln!(
+                            "warning: submodule '{}' has {} remotes and none is 'origin', skipping default branch detection",
+                            sm_path,
+                            remotes.len()
+                        );
+                    }
+                    return None;
+                };
+                let ref_name = format!("refs/remotes/{remote_name}/HEAD");
+                let prefix = format!("refs/remotes/{remote_name}/");
+                r.find_reference(&ref_name)
+                    .ok()
+                    .and_then(|sym| {
+                        sym.symbolic_target()
+                            .and_then(|s| s.strip_prefix(&prefix))
+                            .map(|b| b.to_string())
+                    })
+            })
+            .unwrap_or_else(|| "master".to_string());
+        result.insert(sm_path, (web_url, branch));
+    }
+    result
+}
+
+/// No-op stub when git feature is disabled.
+#[cfg(not(feature = "git"))]
+pub fn detect_submodule_urls(_root: &Path) -> std::collections::HashMap<String, (String, String)> {
+    std::collections::HashMap::new()
 }
 
 /// Rebuild the code portion of the inverted index from file_refs.
@@ -771,5 +851,32 @@ type "pol" {
         scan_code_refs(dir.path(), &schema, &mut cache);
         assert!(cache.is_dirty());
         assert!(cache.index.contains_key("OPP-002"));
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn test_git_remote_to_web_url_ssh() {
+        let url = "git@gitlab.example.com:org/repo.git";
+        let result = git_remote_to_web_url(url);
+        assert_eq!(
+            result,
+            Some("https://gitlab.example.com/org/repo".to_string())
+        );
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn test_git_remote_to_web_url_https() {
+        let url = "https://github.com/user/project.git";
+        let result = git_remote_to_web_url(url);
+        assert_eq!(result, Some("https://github.com/user/project".to_string()));
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn test_git_remote_to_web_url_https_no_suffix() {
+        let url = "https://github.com/user/project";
+        let result = git_remote_to_web_url(url);
+        assert_eq!(result, Some("https://github.com/user/project".to_string()));
     }
 }

@@ -199,6 +199,7 @@ export interface CodeRef {
 	text: string;
 	context_before?: string[];
 	context_after?: string[];
+	file_url?: string;
 }
 
 export interface CommitRef {
