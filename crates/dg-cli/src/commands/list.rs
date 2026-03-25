@@ -51,19 +51,42 @@ pub struct ListArgs {
     pub group_by: Option<String>,
 }
 
-/// Check whether a ListEntry has a known document type in its frontmatter.
+/// Check whether a ListEntry has a known document type (frontmatter or inferred from filename).
 fn is_typed(entry: &ListEntry) -> bool {
     !entry_type(entry).is_empty()
 }
 
-/// Extract the type field from a ListEntry's frontmatter, or "" if missing.
+/// Extract the type from a ListEntry — checks frontmatter `type` field first,
+/// then infers from the document ID in the filename (e.g. `adr-001` → `adr`).
 fn entry_type(entry: &ListEntry) -> &str {
-    entry
+    let fm_type = entry
         .frontmatter_json
         .as_ref()
         .and_then(|f| f.get("type"))
         .and_then(|v| v.as_str())
-        .unwrap_or("")
+        .unwrap_or("");
+    if !fm_type.is_empty() {
+        return fm_type;
+    }
+    // Infer from filename: "adr-001-some-title.md" → "adr"
+    let stem = Path::new(&entry.path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let prefix = stem.split('-').next().unwrap_or("");
+    if !prefix.is_empty() && stem.contains('-') {
+        // Check the part after prefix is numeric (e.g. "001")
+        let rest = &stem[prefix.len()..];
+        if rest.starts_with('-')
+            && rest[1..]
+                .split('-')
+                .next()
+                .is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()))
+        {
+            return prefix;
+        }
+    }
+    ""
 }
 
 /// Build table rows (Document, Status, Date) for typed entries.
