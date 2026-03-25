@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::document::Document;
+use crate::schema::Schema;
 use crate::users::OrgConfig;
 
 use super::SiteConfig;
@@ -33,6 +34,7 @@ pub fn build_nav_tree(
     org: Option<&OrgConfig>,
     config: &SiteConfig,
     services: &[NavService],
+    schema: &Schema,
 ) -> NavTree {
     let mut tree = Vec::new();
 
@@ -51,17 +53,11 @@ pub fn build_nav_tree(
     });
 
     // Documents group — flat list of doc types (individual docs on listing pages)
-    let type_sections: &[(&str, &str, &str)] = &[
-        ("adr", "architecture", "Architecture"),
-        ("opp", "opportunities", "Opportunities"),
-        ("pol", "policies", "Policies"),
-        ("inc", "incidents", "Incidents"),
-        ("spec", "specifications", "Specifications"),
-    ];
+    let type_sections = schema.nav_types();
 
     let mut doc_children: Vec<NavItem> = Vec::new();
-    for &(type_key, dir_name, display_name) in type_sections {
-        let count = by_type.get(type_key).map(|d| d.len()).unwrap_or(0);
+    for (type_key, dir_name, display_name) in &type_sections {
+        let count = by_type.get(*type_key).map(|d| d.len()).unwrap_or(0);
         if count == 0 {
             continue;
         }

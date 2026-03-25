@@ -101,7 +101,7 @@ pub fn run(
             // Generate roadmap page
             let current_q =
                 roadmap::Quarter::from_date(&today).unwrap_or(roadmap::Quarter::new(2026, 1));
-            let html = roadmap::render_roadmap_html(&data, &current_q);
+            let html = roadmap::render_roadmap_html(&data, &current_q, schema);
             let roadmap_path = output.join("roadmap.html");
             std::fs::write(&roadmap_path, &html)
                 .with_context(|| format!("failed to write {}", roadmap_path.display()))?;

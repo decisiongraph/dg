@@ -151,7 +151,7 @@ pub(crate) fn build_roadmap_html(
     )?;
 
     let current_q = roadmap::Quarter::from_date(&today).unwrap_or(roadmap::Quarter::new(2026, 1));
-    let full_html = roadmap::render_roadmap_html(&data, &current_q);
+    let full_html = roadmap::render_roadmap_html(&data, &current_q, schema);
 
     let style = extract_style_tags(&full_html);
     let start = full_html.find("<body>").map(|i| i + 6).unwrap_or(0);

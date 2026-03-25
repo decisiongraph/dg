@@ -362,16 +362,6 @@ pub struct SchemaFieldJson {
     pub values: Vec<SchemaEnumValueJson>,
 }
 
-// ── Type map ───────────────────────────────────────────────────────────
-
-pub(crate) const TYPE_MAP: &[(&str, &str, &str)] = &[
-    ("adr", "architecture", "Architecture"),
-    ("opp", "opportunities", "Opportunities"),
-    ("pol", "policies", "Policies"),
-    ("inc", "incidents", "Incidents"),
-    ("spec", "specifications", "Specifications"),
-];
-
 // ── Builders ───────────────────────────────────────────────────────────
 
 pub fn build_docs_json(
@@ -381,14 +371,8 @@ pub fn build_docs_json(
     project_dir: &Path,
 ) -> DocsJson {
     let mut types = BTreeMap::new();
-    for &(key, folder, display) in TYPE_MAP {
-        types.insert(
-            key.to_string(),
-            TypeInfo {
-                display: display.to_string(),
-                folder: folder.to_string(),
-            },
-        );
+    for (key, folder, display) in schema.nav_types() {
+        types.insert(key.to_string(), TypeInfo { display, folder });
     }
 
     let relation_names = schema.all_relation_field_names();
@@ -842,6 +826,7 @@ pub fn build_nav_json(
     org: Option<&OrgConfig>,
     config: &super::SiteConfig,
     services: &[ServiceJson],
+    schema: &Schema,
 ) -> Vec<NavItemJson> {
     use super::nav;
     let nav_services: Vec<nav::NavService> = services
@@ -853,7 +838,7 @@ pub fn build_nav_json(
             status: s.status.clone(),
         })
         .collect();
-    let nav_tree = nav::build_nav_tree(by_type, org, config, &nav_services);
+    let nav_tree = nav::build_nav_tree(by_type, org, config, &nav_services, schema);
     nav_tree.iter().map(nav_item_to_json).collect()
 }
 
@@ -1685,7 +1670,7 @@ pub fn generate_data_files(
     count += 1;
 
     // nav.json
-    let nav_data = build_nav_json(by_type, org, config, &services_data.services);
+    let nav_data = build_nav_json(by_type, org, config, &services_data.services, schema);
     write_json(&data_dir.join("nav.json"), &nav_data)?;
     count += 1;
 

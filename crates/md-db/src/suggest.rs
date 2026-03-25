@@ -1071,6 +1071,7 @@ mod tests {
                 },
             ],
             rules: vec![],
+            nav_label: None,
         };
         let mut suggestions = Vec::new();
         check_missing_optional_sections(&doc, &type_def, &mut suggestions);
@@ -1108,6 +1109,7 @@ mod tests {
                 callout_required: false,
             }],
             rules: vec![],
+            nav_label: None,
         };
         let mut suggestions = Vec::new();
         check_missing_optional_sections(&doc, &type_def, &mut suggestions);
@@ -1145,6 +1147,7 @@ mod tests {
                 callout_required: false,
             }],
             rules: vec![],
+            nav_label: None,
         };
         let mut suggestions = Vec::new();
         check_missing_diagrams(&doc, &type_def, &mut suggestions);
@@ -1184,6 +1187,7 @@ mod tests {
                 callout_required: false,
             }],
             rules: vec![],
+            nav_label: None,
         };
         let mut suggestions = Vec::new();
         check_missing_diagrams(&doc, &type_def, &mut suggestions);

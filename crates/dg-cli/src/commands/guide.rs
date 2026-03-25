@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use clap::Args;
+use md_db::schema::Schema;
 
 #[derive(Args)]
 pub struct GuideArgs {
@@ -26,8 +27,8 @@ pub struct GuideArgs {
     all: bool,
 }
 
-/// Core workflow - always shown
-const CORE: &str = r#"# DecisionGraph Workflow
+/// Core workflow header - always shown (type table is generated dynamically)
+const CORE_HEADER: &str = r#"# DecisionGraph Workflow
 
 ## Core Principle: Ask First, Then Document
 
@@ -39,14 +40,9 @@ When users make vague requests ("build me X", "we should do Y"):
 
 ## Record Types
 
-| Type | Command | Use For |
-|------|---------|---------|
-| OPP | `dg new opp "..."` | Business opportunities, features |
-| POL | `dg new pol "..."` | Policies, constraints, compliance |
-| ADR | `dg new adr "..."` | Technical/architecture decisions |
-| INC | `dg new inc "..."` | Incidents, post-mortems |
-| SPEC | `dg new spec "..."` | Behavioral specs, user stories |
+"#;
 
+const CORE_FOOTER: &str = r#"
 ## More Info
 
 ```
@@ -57,6 +53,35 @@ dg guide --commands         # All dg commands
 dg guide --all              # Everything
 ```
 "#;
+
+fn record_types_table(schema: &Schema) -> String {
+    let mut table = String::from("| Type | Command | Use For |\n|------|---------|---------|");
+    for td in &schema.types {
+        if td.singleton {
+            continue;
+        }
+        let name = td.name.to_uppercase();
+        let desc = td.description.as_deref().unwrap_or("");
+        table.push_str(&format!(
+            "\n| {name} | `dg new {} \"...\"` | {desc} |",
+            td.name
+        ));
+    }
+    table.push('\n');
+    table
+}
+
+fn new_command_examples(schema: &Schema) -> String {
+    let mut lines = Vec::new();
+    for td in &schema.types {
+        if td.singleton {
+            continue;
+        }
+        let desc = td.description.as_deref().unwrap_or("document");
+        lines.push(format!("dg new {} \"{desc}\"", td.name));
+    }
+    lines.join("\n")
+}
 
 const INTERACTIVE: &str = r#"
 ## Interactive Mode (AskUserQuestion)
@@ -103,17 +128,14 @@ related:
 ```
 "#;
 
-const COMMANDS: &str = r#"
+const COMMANDS_HEADER: &str = r#"
 ## Commands Reference
 
 ```bash
 # Create (title is positional, add --field=value to set fields at creation)
-dg new opp "Problem title"
-dg new pol "Policy name"
-dg new adr "Decision" --status=accepted    # Set fields inline
-dg new inc "Incident"
-dg new spec "User story"
+"#;
 
+const COMMANDS_BODY: &str = r#"
 # Read
 dg list                        # All docs
 dg list --json                 # JSON output (shorthand for --format json)
@@ -165,14 +187,20 @@ dg lint                        # Validate + graph health
 "#;
 
 pub fn run(args: &GuideArgs) -> Result<()> {
+    let schema = Schema::from_str(dg_schemas::SCHEMA)?;
+
     // Always show core
-    print!("{}", CORE);
+    print!("{}", CORE_HEADER);
+    print!("{}", record_types_table(&schema));
+    print!("{}", CORE_FOOTER);
 
     if args.all {
         print!("{}", INTERACTIVE);
         print!("{}", NON_INTERACTIVE);
         print!("{}", MULTI_DOMAIN);
-        print!("{}", COMMANDS);
+        print!("{}", COMMANDS_HEADER);
+        print!("{}", new_command_examples(&schema));
+        print!("{}", COMMANDS_BODY);
     } else {
         if args.interactive {
             print!("{}", INTERACTIVE);
@@ -184,7 +212,9 @@ pub fn run(args: &GuideArgs) -> Result<()> {
             print!("{}", MULTI_DOMAIN);
         }
         if args.commands {
-            print!("{}", COMMANDS);
+            print!("{}", COMMANDS_HEADER);
+            print!("{}", new_command_examples(&schema));
+            print!("{}", COMMANDS_BODY);
         }
     }
 

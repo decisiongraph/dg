@@ -643,9 +643,15 @@ fn group_items_by_team(data: &RoadmapData) -> Vec<(String, Vec<&RoadmapItem>)> {
 // ── HTML Renderer ───────────────────────────────────────────────────────────
 
 /// Render roadmap as a standalone HTML page with Gantt swimlane layout.
-pub fn render_roadmap_html(data: &RoadmapData, current_quarter: &Quarter) -> String {
+pub fn render_roadmap_html(
+    data: &RoadmapData,
+    current_quarter: &Quarter,
+    schema: &crate::schema::Schema,
+) -> String {
+    let pill_css = generate_pill_css(schema);
+
     if data.quarters.is_empty() {
-        return render_empty_roadmap(&data.generated_at);
+        return render_empty_roadmap(&data.generated_at, &pill_css);
     }
 
     let (start_year, start_month, _end_year, _end_month, total_months) =
@@ -704,7 +710,7 @@ pub fn render_roadmap_html(data: &RoadmapData, current_quarter: &Quarter) -> Str
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tech Roadmap</title>
-<style>{GANTT_CSS}</style>
+<style>{GANTT_CSS}{pill_css}</style>
 </head>
 <body>
 <header>
@@ -718,18 +724,19 @@ pub fn render_roadmap_html(data: &RoadmapData, current_quarter: &Quarter) -> Str
 </body>
 </html>
 "#,
+        pill_css = pill_css,
         generated_at = encode_text(&data.generated_at),
     )
 }
 
-fn render_empty_roadmap(generated_at: &str) -> String {
+fn render_empty_roadmap(generated_at: &str, pill_css: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Tech Roadmap</title>
-<style>{GANTT_CSS}</style>
+<style>{GANTT_CSS}{pill_css}</style>
 </head>
 <body>
 <header>
@@ -742,6 +749,7 @@ fn render_empty_roadmap(generated_at: &str) -> String {
 </body>
 </html>
 "#,
+        pill_css = pill_css,
         generated_at = encode_text(generated_at),
     )
 }
@@ -1069,6 +1077,108 @@ fn bar_css_class(status: &str) -> String {
     }
 }
 
+/// (light_bg, light_fg, light_border, dark_bg, dark_fg, dark_border)
+const PILL_PALETTE: &[(&str, &str, &str, &str, &str, &str)] = &[
+    (
+        "#eff6ff",
+        "#1e40af",
+        "#93c5fd",
+        "rgba(59,130,246,0.15)",
+        "#93c5fd",
+        "rgba(59,130,246,0.3)",
+    ),
+    (
+        "#fffbeb",
+        "#92400e",
+        "#fcd34d",
+        "rgba(245,158,11,0.15)",
+        "#fcd34d",
+        "rgba(245,158,11,0.3)",
+    ),
+    (
+        "#eef2ff",
+        "#3730a3",
+        "#a5b4fc",
+        "rgba(99,102,241,0.15)",
+        "#a5b4fc",
+        "rgba(99,102,241,0.3)",
+    ),
+    (
+        "#fef2f2",
+        "#991b1b",
+        "#fca5a5",
+        "rgba(239,68,68,0.15)",
+        "#fca5a5",
+        "rgba(239,68,68,0.3)",
+    ),
+    (
+        "#ecfdf5",
+        "#065f46",
+        "#6ee7b7",
+        "rgba(16,185,129,0.15)",
+        "#6ee7b7",
+        "rgba(16,185,129,0.3)",
+    ),
+    (
+        "#faf5ff",
+        "#6b21a8",
+        "#c4b5fd",
+        "rgba(168,85,247,0.15)",
+        "#c4b5fd",
+        "rgba(168,85,247,0.3)",
+    ),
+    (
+        "#f0fdfa",
+        "#115e59",
+        "#5eead4",
+        "rgba(20,184,166,0.15)",
+        "#5eead4",
+        "rgba(20,184,166,0.3)",
+    ),
+    (
+        "#fff1f2",
+        "#9f1239",
+        "#fda4af",
+        "rgba(244,63,94,0.15)",
+        "#fda4af",
+        "rgba(244,63,94,0.3)",
+    ),
+];
+
+fn generate_pill_css(schema: &crate::schema::Schema) -> String {
+    let nav_types = schema.nav_types();
+    let mut css = String::new();
+
+    // Light mode vars
+    css.push_str("\n:root {\n");
+    for (i, (key, _, _)) in nav_types.iter().enumerate() {
+        let (lbg, lfg, lborder, _, _, _) = PILL_PALETTE[i % PILL_PALETTE.len()];
+        css.push_str(&format!(
+            "  --g-pill-{key}-bg: {lbg}; --g-pill-{key}-fg: {lfg}; --g-pill-{key}-border: {lborder};\n"
+        ));
+    }
+    css.push_str("}\n");
+
+    // Dark mode vars
+    css.push_str(".dark {\n");
+    for (i, (key, _, _)) in nav_types.iter().enumerate() {
+        let (_, _, _, dbg, dfg, dborder) = PILL_PALETTE[i % PILL_PALETTE.len()];
+        css.push_str(&format!(
+            "  --g-pill-{key}-bg: {dbg}; --g-pill-{key}-fg: {dfg}; --g-pill-{key}-border: {dborder};\n"
+        ));
+    }
+    css.push_str("}\n");
+
+    // Class rules
+    for (key, _, _) in &nav_types {
+        css.push_str(&format!(
+            ".linked-pill.{key} {{ border-color: var(--g-pill-{key}-border); background: var(--g-pill-{key}-bg); color: var(--g-pill-{key}-fg); }}\n"
+        ));
+    }
+
+    css
+}
+
 const GANTT_CSS: &str = r#"
 :root {
   --label-w: 20rem;
@@ -1111,9 +1221,6 @@ const GANTT_CSS: &str = r#"
   /* Linked pills */
   --g-pill-bg: #f1f5f9; --g-pill-fg: #334155; --g-pill-border: #cbd5e1;
   --g-pill-hover-bg: #e2e8f0;
-  --g-pill-adr-bg: #eff6ff; --g-pill-adr-fg: #1e40af; --g-pill-adr-border: #93c5fd;
-  --g-pill-pol-bg: #eef2ff; --g-pill-pol-fg: #3730a3; --g-pill-pol-border: #a5b4fc;
-  --g-pill-inc-bg: #fef2f2; --g-pill-inc-fg: #991b1b; --g-pill-inc-border: #fca5a5;
   /* Card hover */
   --g-card-hover-border: #93c5fd;
   --g-card-hover-shadow: rgba(37,99,235,0.12);
@@ -1155,9 +1262,6 @@ const GANTT_CSS: &str = r#"
   --g-effort-bg: rgba(168,85,247,0.2); --g-effort-fg: #c4b5fd;
   --g-pill-bg: #1e293b; --g-pill-fg: #cbd5e1; --g-pill-border: rgba(255,255,255,0.15);
   --g-pill-hover-bg: #334155;
-  --g-pill-adr-bg: rgba(59,130,246,0.15); --g-pill-adr-fg: #93c5fd; --g-pill-adr-border: rgba(59,130,246,0.3);
-  --g-pill-pol-bg: rgba(99,102,241,0.15); --g-pill-pol-fg: #a5b4fc; --g-pill-pol-border: rgba(99,102,241,0.3);
-  --g-pill-inc-bg: rgba(239,68,68,0.15); --g-pill-inc-fg: #fca5a5; --g-pill-inc-border: rgba(239,68,68,0.3);
   --g-card-hover-border: #3b82f6;
   --g-card-hover-shadow: rgba(59,130,246,0.2);
   --g-count-bg: rgba(245,158,11,0.2); --g-count-fg: #fcd34d;
@@ -1339,9 +1443,6 @@ a:focus-visible, .bar:focus-visible { outline: 2px solid var(--g-link); outline-
 /* Linked doc pills */
 .linked-pill { display: inline-block; padding: 0.25rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; background: var(--g-pill-bg); color: var(--g-pill-fg); border: 1px solid var(--g-pill-border); text-decoration: none; }
 .linked-pill:hover { background: var(--g-pill-hover-bg); text-decoration: none; }
-.linked-pill.adr { border-color: var(--g-pill-adr-border); background: var(--g-pill-adr-bg); color: var(--g-pill-adr-fg); }
-.linked-pill.pol { border-color: var(--g-pill-pol-border); background: var(--g-pill-pol-bg); color: var(--g-pill-pol-fg); }
-.linked-pill.inc { border-color: var(--g-pill-inc-border); background: var(--g-pill-inc-bg); color: var(--g-pill-inc-fg); }
 
 /* Responsive */
 @media (max-width: 640px) {

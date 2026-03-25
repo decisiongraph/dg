@@ -218,7 +218,7 @@ pub fn generate_site(
     )?;
 
     // 8. Write per-route index.html for static server compatibility
-    let fallback_count = write_fallback_pages(output_dir, &by_type, org)?;
+    let fallback_count = write_fallback_pages(output_dir, &by_type, org, schema)?;
 
     Ok(spa_count + data_count + fallback_count)
 }
@@ -229,6 +229,7 @@ fn write_fallback_pages(
     output_dir: &Path,
     by_type: &BTreeMap<String, Vec<(String, &Document)>>,
     org: Option<&OrgConfig>,
+    schema: &crate::schema::Schema,
 ) -> crate::error::Result<usize> {
     let index_html = std::fs::read(output_dir.join("index.html"))
         .map_err(|_| crate::error::Error::WriteFailed(output_dir.join("index.html")))?;
@@ -244,12 +245,13 @@ fn write_fallback_pages(
         "org/entities".into(),
     ];
 
-    // Per-doc-type list + per-doc routes — use TYPE_MAP SPA route names, not schema folder
+    // Per-doc-type list + per-doc routes — use schema nav route names, not schema folder
+    let nav_types = schema.nav_types();
     for (type_key, docs) in by_type {
-        let spa_route = data::TYPE_MAP
+        let spa_route = nav_types
             .iter()
             .find(|(key, _, _)| *key == type_key.as_str())
-            .map(|(_, folder, _)| *folder)
+            .map(|(_, folder, _)| folder.as_str())
             .unwrap_or(type_key.as_str());
         routes.push(spa_route.to_string());
         for (id, _) in docs {

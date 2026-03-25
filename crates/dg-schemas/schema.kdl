@@ -4,7 +4,7 @@
 // ─── Reference resolution rules ──────────────────────────────────────────────
 
 ref-format {
-    string-id pattern="^(ADR|INC|POL|OPP|SPEC)-\\d+$"
+    string-id pattern="^(ADR|INC|POL|OPP|SPEC|PROC)-\\d+$"
     relative-path pattern="\\.md$"
 }
 
@@ -239,7 +239,7 @@ type "app-readme" folder="apps" singleton=#true description="App README in monor
 
 // ─── SPEC: Behavioral Specification / User Story ────────────────────────────
 
-type "spec" description="Behavioral Specification / User Story" folder="docs/specs" {
+type "spec" description="Behavioral Specification / User Story" folder="docs/specs" nav_label="specifications" {
     alias "feature"
     field "status" type="enum" required=#true default="draft" description="Spec lifecycle" {
         values "draft" "proposed" "approved" "implemented" "deprecated"
@@ -261,5 +261,54 @@ type "spec" description="Behavioral Specification / User Story" folder="docs/spe
     section "Scenarios" required=#true description="Gherkin scenarios in code blocks"
     section "Acceptance Criteria" description="Non-Gherkin acceptance conditions" {
         list min-items=1
+    }
+}
+
+// ─── PROC: Process Document ─────────────────────────────────────────────────
+
+type "proc" description="Process Document" folder="docs/processes" {
+    alias "process"
+    field "status" type="enum" required=#true default="draft" description="Process lifecycle" {
+        values "draft" "proposed" "active" "deprecated" "superseded"
+        transition "draft" "proposed"
+        transition "proposed" "active"
+        transition "active" "deprecated" "superseded"
+    }
+    field "author" type="user" required=#true description="Process author"
+    field "owner" type="user" description="Accountable process owner"
+    field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
+    field "review_date" type="string" pattern="^\\d{4}-\\d{2}-\\d{2}$" description="Next review date"
+    field "tags" type="string[]"
+
+    section "Overview" required=#true description="Purpose and scope of the process" {
+        content min-paragraphs=1
+    }
+    section "Inputs and Prerequisites" required=#true description="Triggers and required state to begin" {
+        list min-items=1
+    }
+    section "Outputs" required=#true description="Expected artifacts and end state" {
+        list min-items=1
+    }
+    section "Roles and Responsibilities" description="RACI matrix for the process" {
+        table {
+            column "Role" type="string" required=#true
+            column "Responsibility" type="string" required=#true
+            column "Owner" type="user"
+        }
+    }
+    section "Process Flow" required=#true description="High-level visual flow" {
+        diagram required=#true
+    }
+    section "Steps" required=#true description="Detailed step-by-step procedure" {
+        list min-items=1 ordered=#true
+    }
+    section "Exceptions and Escalation" description="Handling edge cases and failure modes"
+    section "Metrics" description="Key performance indicators and SLAs"
+    section "Revision History" {
+        table {
+            column "Date" type="string" required=#true
+            column "Author" type="user" required=#true
+            column "Changes" type="string" required=#true
+        }
     }
 }

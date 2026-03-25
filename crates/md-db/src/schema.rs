@@ -30,6 +30,8 @@ pub struct TypeDef {
     pub fields: Vec<FieldDef>,
     pub sections: Vec<SectionDef>,
     pub rules: Vec<RuleDef>,
+    /// Override for the navigation route/label (defaults to last folder segment).
+    pub nav_label: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -343,6 +345,26 @@ impl Schema {
             crate::graph::is_string_id_fallback(s)
         }
     }
+
+    /// Build type map for site navigation: `(type_key, route, display_name)`.
+    /// Only includes non-singleton types that have a folder.
+    pub fn nav_types(&self) -> Vec<(&str, String, String)> {
+        self.types
+            .iter()
+            .filter(|t| !t.singleton && t.folder.is_some())
+            .map(|t| {
+                let folder = t.folder.as_deref().unwrap();
+                let last_segment = folder.rsplit('/').next().unwrap_or(folder);
+                let route = t.nav_label.as_deref().unwrap_or(last_segment);
+                let mut chars = route.chars();
+                let display = match chars.next() {
+                    None => String::new(),
+                    Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+                };
+                (t.name.as_str(), route.to_string(), display)
+            })
+            .collect()
+    }
 }
 
 fn parse_type_def(node: &KdlNode) -> Result<TypeDef> {
@@ -356,6 +378,7 @@ fn parse_type_def(node: &KdlNode) -> Result<TypeDef> {
 
     let description = get_string_prop(node, "description");
     let folder = get_string_prop(node, "folder");
+    let nav_label = get_string_prop(node, "nav_label");
     let max_count = get_i64_prop(node, "max_count").map(|n| n as usize);
     let singleton = get_bool_prop(node, "singleton").unwrap_or(false);
 
@@ -422,6 +445,7 @@ fn parse_type_def(node: &KdlNode) -> Result<TypeDef> {
         fields,
         sections,
         rules,
+        nav_label,
     })
 }
 
