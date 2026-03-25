@@ -284,7 +284,7 @@ fn stop(root: &Path) -> Result<()> {
         ));
     }
 
-    // 2. Suggest — advisory
+    // 2. Suggest — advisory (print but don't block)
     let today = today_str();
     let suggestions = md_db::suggest::suggest_directory(root, &schema, None, &today)?;
     let total = suggestions.total();
@@ -294,9 +294,9 @@ fn stop(root: &Path) -> Result<()> {
             .iter()
             .filter(|f| !f.suggestions.is_empty())
             .count();
-        issues.push(format!(
-            "dg suggest found {total} suggestion(s) across {doc_count} document(s). Run `dg suggest` for details."
-        ));
+        eprintln!(
+            "ℹ️  dg suggest found {total} suggestion(s) across {doc_count} document(s). Run `dg suggest` for details."
+        );
     }
 
     // 3. Check for SPEC docs without implementation code
