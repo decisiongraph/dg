@@ -7,13 +7,12 @@
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { DocEntry } from '$lib/types';
 
-	const folderToType: Record<string, string> = {
-		architecture: 'adr',
-		opportunities: 'opp',
-		policies: 'pol',
-		incidents: 'inc',
-		specifications: 'spec'
-	};
+	/** Build folder→type mapping dynamically from docs.json types */
+	const folderToType = $derived(
+		Object.fromEntries(
+			Object.entries($docTypes).map(([key, info]) => [info.folder, key])
+		) as Record<string, string>
+	);
 
 	/** Fallback descriptions if schema.json doesn't have them */
 	const fallbackDescriptions: Record<string, string> = {

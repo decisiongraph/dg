@@ -3,6 +3,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	build: {
+		minify: false
+	},
 	plugins: [
 		tailwindcss(/** @type {any} */ ({
 			exclude: ['**/node_modules/@xyflow/**']
