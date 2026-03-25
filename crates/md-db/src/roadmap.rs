@@ -97,6 +97,13 @@ pub struct RoadmapData {
     pub generated_at: String,
 }
 
+impl RoadmapData {
+    /// True when the roadmap contains no items at all (no quarter items and no backlog).
+    pub fn is_empty(&self) -> bool {
+        self.backlog.is_empty() && self.quarters.values().all(|q| q.items.is_empty())
+    }
+}
+
 /// Data for a single quarter.
 #[derive(Debug, Default, Serialize)]
 pub struct QuarterData {

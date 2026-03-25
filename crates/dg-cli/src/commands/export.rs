@@ -218,7 +218,7 @@ fn run_site(
 
     let config = SiteConfig {
         title,
-        roadmap: !args.no_roadmap,
+        roadmap: !args.no_roadmap && roadmap_html.is_some(),
         users: !args.no_users,
         roadmap_html,
         roadmap_generated_at,

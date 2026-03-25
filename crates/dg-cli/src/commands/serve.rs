@@ -100,7 +100,7 @@ fn build_site(
 
     let config = SiteConfig {
         title,
-        roadmap: true,
+        roadmap: roadmap_html.is_some(),
         users: true,
         roadmap_html,
         roadmap_generated_at,

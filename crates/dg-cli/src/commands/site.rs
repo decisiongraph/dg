@@ -50,7 +50,7 @@ pub fn run(
 
     let config = SiteConfig {
         title,
-        roadmap: !args.no_roadmap,
+        roadmap: !args.no_roadmap && roadmap_html.is_some(),
         users: !args.no_users,
         roadmap_html,
         roadmap_generated_at,
@@ -149,6 +149,10 @@ pub(crate) fn build_roadmap_html(
         future,
         status_history.as_ref(),
     )?;
+
+    if data.is_empty() {
+        anyhow::bail!("no roadmap items found");
+    }
 
     let current_q = roadmap::Quarter::from_date(&today).unwrap_or(roadmap::Quarter::new(2026, 1));
     let full_html = roadmap::render_roadmap_html(&data, &current_q, schema);
