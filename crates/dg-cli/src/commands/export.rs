@@ -29,7 +29,7 @@ pub enum DiagramStyleArg {
 
 #[derive(Args)]
 pub struct ExportArgs {
-    /// Export Gherkin scenarios from spec documents
+    /// Export Gherkin scenarios from all document types
     #[arg(long)]
     pub features: bool,
 
@@ -85,22 +85,17 @@ pub fn run(
         bail!("no export mode specified; use --features or --site");
     }
 
-    let type_def = schema
-        .get_type("spec")
-        .context("schema has no 'spec' type defined")?;
-    let folder = type_def
-        .folder
-        .as_deref()
-        .context("spec type has no folder defined")?;
-
-    let spec_dir = root.join(folder);
-    if !spec_dir.is_dir() {
-        eprintln!("warning: spec directory not found: {}", spec_dir.display());
-        println!("Exported 0 features to {}", args.output.display());
-        return Ok(());
+    let mut files = Vec::new();
+    for td in &schema.types {
+        if let Some(folder) = &td.folder {
+            let dir = root.join(folder);
+            if dir.is_dir() {
+                if let Ok(found) = discovery::discover_files(&dir, None, &[], false) {
+                    files.extend(found);
+                }
+            }
+        }
     }
-
-    let files = discovery::discover_files(&spec_dir, None, &[], false)?;
     if files.is_empty() {
         println!("Exported 0 features to {}", args.output.display());
         return Ok(());
