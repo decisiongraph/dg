@@ -62,11 +62,21 @@ in
     jetbrains-mono
   ];
 
-  # Browser automation for testing
+  # Browser automation for testing (Chromium)
   claude.code.mcpServers.playwright = {
     type = "stdio";
     command = "npx";
     args = [ "@playwright/mcp@latest" ];
+  };
+
+  # Browser automation for Safari/WebKit testing
+  claude.code.mcpServers.playwright-webkit = {
+    type = "stdio";
+    command = "npx";
+    args = [ "@playwright/mcp@latest" ];
+    env = {
+      PLAYWRIGHT_BROWSER = "webkit";
+    };
   };
 
   # Gemini UX review via consult-llm-mcp (requires GEMINI_API_KEY env var)
