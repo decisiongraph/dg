@@ -37,6 +37,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - uses: oven-sh/setup-bun@v2
+
       - name: Install cross
         if: matrix.use_cross
         uses: taiki-e/install-action@v2
