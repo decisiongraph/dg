@@ -335,6 +335,13 @@ h6:hover > .heading-anchor,
   margin: 0;
   display: inline;
 }
+/* Vertically center user mention avatars in table cells */
+.prose td .group\/mention {
+  vertical-align: middle;
+}
+.prose td:has(.group\/mention) {
+  vertical-align: middle;
+}
 
 /* Kill top margin on first content element in doc body (3-level HtmlContent nesting) */
 .doc-body > :first-child,
