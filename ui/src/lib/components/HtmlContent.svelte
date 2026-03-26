@@ -662,7 +662,8 @@
 			if (outer) {
 				if (!outer.getAttribute('width')) {
 					outer.setAttribute('width', '100%');
-					outer.setAttribute('height', 'auto');
+					outer.removeAttribute('height');
+					outer.style.height = 'auto';
 				}
 				outer.style.overflow = 'visible';
 			}

@@ -51,7 +51,13 @@ fn main() {
             }
         }
         _ => {
-            // bun not available — create a minimal fallback
+            // In release mode, bun is required — fail the build
+            let profile = std::env::var("PROFILE").unwrap_or_default();
+            if profile == "release" {
+                panic!("bun is required for release builds. Install bun (https://bun.sh) or set DG_SKIP_UI_BUILD=1 to skip.");
+            }
+
+            // bun not available in debug mode — create a minimal fallback
             eprintln!("cargo:warning=bun not found, creating minimal SPA fallback");
             std::fs::create_dir_all(&build_dir).expect("Failed to create ui/build/");
             std::fs::write(
