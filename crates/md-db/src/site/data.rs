@@ -258,6 +258,9 @@ pub struct ServiceJson {
     pub test_framework: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dev_commands: Option<DevCommandsJson>,
+    /// Web URL for the source repository (from git submodule or main repo)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
     #[cfg(feature = "avatars")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub eol_warnings: Vec<crate::eol::EolWarning>,
@@ -1548,6 +1551,13 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
         .map(|o| o.teams.keys().map(|k| k.as_str()).collect())
         .unwrap_or_default();
 
+    // Detect submodule URLs for source links
+    #[cfg(feature = "git")]
+    let submodule_urls = crate::code_refs::detect_submodule_urls(project_dir);
+    #[cfg(not(feature = "git"))]
+    let submodule_urls: std::collections::HashMap<String, (String, String)> =
+        std::collections::HashMap::new();
+
     // Discover services, apps, and infra — tagged by kind
     let mut tagged_readmes: Vec<(PathBuf, &str)> = Vec::new();
     if let Ok(svc) = crate::service::discover_service_readmes(project_dir) {
@@ -1626,6 +1636,17 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
             crate::eol::check_service_eol(&meta.tech_stack, &cache_dir, &today)
         };
 
+        // Resolve source URL: check if service dir is a git submodule
+        let source_url = readme_path
+            .parent()
+            .and_then(|svc_dir| svc_dir.strip_prefix(project_dir).ok())
+            .and_then(|rel| rel.to_str())
+            .and_then(|rel_str| {
+                submodule_urls
+                    .get(rel_str)
+                    .map(|(web_url, _branch)| web_url.clone())
+            });
+
         services.push(ServiceJson {
             slug,
             name: meta.name,
@@ -1654,6 +1675,7 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
             has_tests: meta.practices.has_tests,
             test_framework: meta.practices.test_framework,
             dev_commands,
+            source_url,
             #[cfg(feature = "avatars")]
             eol_warnings,
         });
