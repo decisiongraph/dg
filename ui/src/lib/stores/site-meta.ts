@@ -14,6 +14,9 @@ export interface SiteMeta {
 	edit_url_prefix?: string;
 	is_local_dev?: boolean;
 	source_path?: string;
+	clone_url?: string;
+	has_claude_md?: boolean;
+	has_submodules?: boolean;
 }
 
 export const siteMeta = writable<SiteMeta>({ title: 'Documentation' });

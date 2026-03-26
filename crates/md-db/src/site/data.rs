@@ -313,6 +313,15 @@ pub struct SiteMetaJson {
     /// Source file for the intro/README page
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
+    /// Git clone URL for the project (derived from edit_url_prefix)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clone_url: Option<String>,
+    /// True if project has a CLAUDE.md file
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub has_claude_md: bool,
+    /// True if project uses git submodules
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub has_submodules: bool,
 }
 
 #[derive(Serialize)]
@@ -1782,6 +1791,18 @@ pub fn generate_data_files(
         None
     };
 
+    let has_claude_md = project_dir.join("CLAUDE.md").is_file();
+    let has_submodules = project_dir.join(".gitmodules").is_file();
+    let clone_url = config.edit_url_prefix.as_deref().and_then(|prefix| {
+        // "https://gitlab.example.com/org/repo/-/edit/main/" → "https://gitlab.example.com/org/repo.git"
+        // "https://github.com/org/repo/edit/main/" → "https://github.com/org/repo.git"
+        let url = prefix
+            .trim_end_matches('/')
+            .strip_suffix("/edit/main")
+            .or_else(|| prefix.trim_end_matches('/').strip_suffix("/-/edit/main"))?;
+        Some(format!("{url}.git"))
+    });
+
     let meta = SiteMetaJson {
         title: config.title.clone(),
         readme_html: None, // served separately in readme.json for faster initial load
@@ -1790,6 +1811,9 @@ pub fn generate_data_files(
         edit_url_prefix: config.edit_url_prefix.clone(),
         is_local_dev: config.is_local_dev,
         source_path: readme_source.clone(),
+        clone_url,
+        has_claude_md,
+        has_submodules,
     };
     write_json(&data_dir.join("site-meta.json"), &meta)?;
     count += 1;

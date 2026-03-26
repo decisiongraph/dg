@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { docTypes, allDocs, docsLoading } from '$lib/stores/docs';
+	import { siteMeta } from '$lib/stores/site-meta';
 	import { orgData } from '$lib/stores/org';
 	import { assignmentsData, loadAssignments } from '$lib/stores/assignments';
 	import { isDark } from '$lib/stores/theme';
@@ -552,6 +553,52 @@
 	{#if $docsLoading}
 		<div class="text-muted-foreground">Loading...</div>
 	{:else}
+		<!-- Quick start tutorial (collapsible) -->
+		<details class="dev-section-collapsible mb-8">
+			<summary>
+				<strong>Quick start with the CLI</strong>
+				<span class="dev-section-hint">Setup guide for engineers — click to expand</span>
+			</summary>
+			<div class="dev-section-content">
+				<div class="rounded-lg border border-border bg-muted/50 p-4 text-sm space-y-3 font-mono">
+					<div>
+						<span class="text-muted-foreground"># Clone the repository</span><br />
+						<span class="text-foreground">git clone {$siteMeta.has_submodules ? '--recurse-submodules ' : ''}{$siteMeta.clone_url ?? '$GIT_URL'} docs</span>
+					</div>
+					<div>
+						<span class="text-muted-foreground"># Install tools</span><br />
+						<span class="text-foreground">brew install {$siteMeta.has_claude_md ? 'claude-code ' : ''}decisiongraph/tap/dg</span>
+					</div>
+					<div>
+						<span class="text-muted-foreground"># Enter project</span><br />
+						<span class="text-foreground">cd docs</span>
+					</div>
+					<div>
+						<span class="text-muted-foreground"># List all documents</span><br />
+						<span class="text-foreground">dg list</span>
+					</div>
+					{#if $siteMeta.has_claude_md}
+						<div>
+							<span class="text-muted-foreground"># Launch AI-assisted development</span><br />
+							<span class="text-foreground">dg claude</span>
+						</div>
+					{/if}
+					<div>
+						<span class="text-muted-foreground"># Create a new opportunity</span><br />
+						<span class="text-foreground">dg new opp "Migrate to edge CDN"</span>
+					</div>
+					<div>
+						<span class="text-muted-foreground"># Validate all documents</span><br />
+						<span class="text-foreground">dg validate</span>
+					</div>
+					<div>
+						<span class="text-muted-foreground"># Render this site locally and open it</span><br />
+						<span class="text-foreground">dg serve --open</span>
+					</div>
+				</div>
+			</div>
+		</details>
+
 		<!-- Decision flow graph -->
 		<section class="mb-10">
 			<h2 class="text-lg font-semibold text-foreground mb-2">How documents connect</h2>
@@ -893,33 +940,5 @@
 			</section>
 		{/if}
 
-		<!-- Quick start -->
-		<section class="mb-10">
-			<h2 class="text-lg font-semibold text-foreground mb-2">Quick start with the CLI</h2>
-			<div class="rounded-lg border border-border bg-muted/50 p-4 text-sm space-y-3 font-mono">
-				<div>
-					<span class="text-muted-foreground"># Create a new opportunity</span><br />
-					<span class="text-foreground">dg new opp "Migrate to edge CDN"</span>
-				</div>
-				<div>
-					<span class="text-muted-foreground"># Create a spec that implements it</span><br />
-					<span class="text-foreground"
-						>dg new spec "CDN cache invalidation" --set implements=OPP-004</span
-					>
-				</div>
-				<div>
-					<span class="text-muted-foreground"># Validate all documents</span><br />
-					<span class="text-foreground">dg validate</span>
-				</div>
-				<div>
-					<span class="text-muted-foreground"># See what needs attention</span><br />
-					<span class="text-foreground">dg suggest</span>
-				</div>
-				<div>
-					<span class="text-muted-foreground"># Render this site locally and open it</span><br />
-					<span class="text-foreground">dg serve --open</span>
-				</div>
-			</div>
-		</section>
 	{/if}
 </div>
