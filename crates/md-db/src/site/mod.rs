@@ -217,10 +217,79 @@ pub fn generate_site(
         dir,
     )?;
 
-    // 8. Write per-route index.html for static server compatibility
+    // 8. Copy static assets (images, etc.) from doc folders to output
+    let asset_count = copy_doc_assets(dir, output_dir, schema)?;
+
+    // 9. Write per-route index.html for static server compatibility
     let fallback_count = write_fallback_pages(output_dir, &by_type, org, schema)?;
 
-    Ok(spa_count + data_count + fallback_count)
+    Ok(spa_count + data_count + asset_count + fallback_count)
+}
+
+/// Copy static assets (images, PDFs, etc.) from the `docs/` tree to the site output.
+///
+/// Walks each schema type folder and copies non-markdown files, preserving
+/// the directory structure relative to the project root. For example,
+/// `docs/assets/proc-001/screenshot.png` → `<output>/docs/assets/proc-001/screenshot.png`.
+fn copy_doc_assets(
+    project_dir: &Path,
+    output_dir: &Path,
+    schema: &crate::schema::Schema,
+) -> crate::error::Result<usize> {
+    use std::collections::HashSet;
+
+    let asset_exts: HashSet<&str> = [
+        "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "pdf", "webm", "mp4",
+    ]
+    .into_iter()
+    .collect();
+
+    let mut count = 0;
+
+    // Collect unique parent directories from schema type folders (e.g. "docs")
+    let mut roots: HashSet<&str> = HashSet::new();
+    for td in &schema.types {
+        if let Some(folder) = &td.folder {
+            // "docs/architecture" → "docs"
+            if let Some(root) = folder.split('/').next() {
+                roots.insert(root);
+            }
+        }
+    }
+
+    for root in roots {
+        let src_root = project_dir.join(root);
+        if !src_root.is_dir() {
+            continue;
+        }
+        for entry in walkdir::WalkDir::new(&src_root)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let ext = entry
+                .path()
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !asset_exts.contains(ext.as_str()) {
+                continue;
+            }
+            let rel = entry
+                .path()
+                .strip_prefix(project_dir)
+                .unwrap_or(entry.path());
+            let dest = output_dir.join(rel);
+            if let Some(parent) = dest.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::copy(entry.path(), &dest);
+            count += 1;
+        }
+    }
+
+    Ok(count)
 }
 
 /// Write a copy of index.html into each SPA route directory so plain static
