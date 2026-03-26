@@ -1815,14 +1815,18 @@ pub fn generate_data_files(
 
     let has_claude_md = project_dir.join("CLAUDE.md").is_file();
     let has_submodules = project_dir.join(".gitmodules").is_file();
+    // Derive clone URL from edit_url_prefix by stripping /-/edit/<branch>/ or /edit/<branch>/
     let clone_url = config.edit_url_prefix.as_deref().and_then(|prefix| {
-        // "https://gitlab.example.com/org/repo/-/edit/main/" → "https://gitlab.example.com/org/repo.git"
-        // "https://github.com/org/repo/edit/main/" → "https://github.com/org/repo.git"
-        let url = prefix
-            .trim_end_matches('/')
-            .strip_suffix("/edit/main")
-            .or_else(|| prefix.trim_end_matches('/').strip_suffix("/-/edit/main"))?;
-        Some(format!("{url}.git"))
+        let trimmed = prefix.trim_end_matches('/');
+        // GitLab: "https://gitlab.example.com/org/repo/-/edit/master" → strip "/-/edit/master"
+        if let Some(pos) = trimmed.find("/-/edit/") {
+            return Some(format!("{}.git", &trimmed[..pos]));
+        }
+        // GitHub: "https://github.com/org/repo/edit/main" → strip "/edit/main"
+        if let Some(pos) = trimmed.find("/edit/") {
+            return Some(format!("{}.git", &trimmed[..pos]));
+        }
+        None
     });
 
     let meta = SiteMetaJson {

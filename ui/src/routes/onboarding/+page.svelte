@@ -584,8 +584,8 @@
 						</div>
 					{/if}
 					<div>
-						<span class="text-muted-foreground"># Create a new opportunity</span><br />
-						<span class="text-foreground">dg new opp "Migrate to edge CDN"</span>
+						<span class="text-muted-foreground"># Record an architecture decision</span><br />
+						<span class="text-foreground">dg new adr "Use PostgreSQL for primary database"</span>
 					</div>
 					<div>
 						<span class="text-muted-foreground"># Validate all documents</span><br />
