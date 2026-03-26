@@ -1,0 +1,2 @@
+[build.env]
+passthrough = ["DG_SKIP_UI_BUILD"]
