@@ -73,10 +73,7 @@ in
   claude.code.mcpServers.playwright-webkit = {
     type = "stdio";
     command = "npx";
-    args = [ "@playwright/mcp@latest" ];
-    env = {
-      PLAYWRIGHT_BROWSER = "webkit";
-    };
+    args = [ "-y" "@playwright/mcp@latest" "--browser" "webkit" ];
   };
 
   # Gemini UX review via consult-llm-mcp (requires GEMINI_API_KEY env var)
