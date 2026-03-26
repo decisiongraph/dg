@@ -295,6 +295,26 @@ fn handle_request(
         tiny_http::Response::from_data(content)
             .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/html").unwrap())
             .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap())
+    } else if has_file_extension(url_path) {
+        // Try serving static assets from the project root (images, etc.)
+        let root_path = root.join(url_path);
+        if root_path.is_file() {
+            let content = std::fs::read(&root_path).unwrap_or_default();
+            let mime = mime_type(&root_path);
+            tiny_http::Response::from_data(content)
+                .with_header(
+                    tiny_http::Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap(),
+                )
+                .with_header(
+                    tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap(),
+                )
+        } else {
+            tiny_http::Response::from_data(b"Not Found".to_vec())
+                .with_status_code(404)
+                .with_header(
+                    tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/plain").unwrap(),
+                )
+        }
     } else {
         // SPA fallback: serve index.html for non-asset routes
         let fallback = output.join("index.html");
@@ -367,6 +387,14 @@ fn mime_type(path: &Path) -> &'static str {
         Some("jpg") | Some("jpeg") => "image/jpeg",
         _ => "application/octet-stream",
     }
+}
+
+/// Check if a URL path looks like a file request (has an extension).
+fn has_file_extension(url_path: &str) -> bool {
+    url_path
+        .rsplit('/')
+        .next()
+        .is_some_and(|last| last.contains('.'))
 }
 
 /// Simple percent-decode for URL query values (handles %20, %2F, etc.)

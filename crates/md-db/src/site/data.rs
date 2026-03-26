@@ -524,6 +524,19 @@ pub fn build_docs_json(
                 .unwrap_or_default();
 
             let body_html = strip_leading_h1(&render_markdown_to_html(&doc.body), &title);
+            // Rewrite relative image/link src paths to be root-relative
+            let body_html = if let Some(doc_path) = doc.path.as_ref() {
+                let doc_dir = doc_path
+                    .parent()
+                    .and_then(|p| p.strip_prefix(project_dir).ok());
+                if let Some(dir) = doc_dir {
+                    rewrite_relative_asset_paths(&body_html, dir)
+                } else {
+                    body_html
+                }
+            } else {
+                body_html
+            };
 
             let open_questions = crate::questions::extract_questions(doc)
                 .iter()
@@ -773,6 +786,54 @@ fn strip_leading_h1(html: &str, title: &str) -> String {
         }
     }
     html.to_string()
+}
+
+/// Rewrite relative `src` and `href` attributes in HTML to root-relative paths.
+///
+/// Given a doc at `docs/processes/proc-001.md` referencing `../assets/img.png`,
+/// this resolves to `/docs/assets/img.png` so the SPA can serve it regardless
+/// of the current URL path. Absolute URLs and anchors are left unchanged.
+fn rewrite_relative_asset_paths(html: &str, doc_dir: &std::path::Path) -> String {
+    use regex::Regex;
+    use std::sync::LazyLock;
+
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(src|href)="([^"]*?)""#).unwrap());
+
+    RE.replace_all(html, |caps: &regex::Captures| {
+        let attr = &caps[1];
+        let path = &caps[2];
+
+        // Skip absolute URLs, anchors, data URIs, and already-root-relative paths
+        if path.starts_with("http://")
+            || path.starts_with("https://")
+            || path.starts_with('#')
+            || path.starts_with("data:")
+            || path.starts_with('/')
+        {
+            return caps[0].to_string();
+        }
+
+        // Resolve relative path against the doc directory
+        let resolved = doc_dir.join(path);
+        // Normalize away ../
+        let mut parts: Vec<&str> = Vec::new();
+        for component in resolved.components() {
+            match component {
+                std::path::Component::ParentDir => {
+                    parts.pop();
+                }
+                std::path::Component::Normal(s) => {
+                    if let Some(s) = s.to_str() {
+                        parts.push(s);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let normalized = parts.join("/");
+        format!("{attr}=\"/{normalized}\"")
+    })
+    .to_string()
 }
 
 /// Strip optional YAML frontmatter (--- delimited) from markdown content.
