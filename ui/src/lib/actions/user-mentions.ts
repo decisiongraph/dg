@@ -161,7 +161,14 @@ export function showCard(trigger: HTMLElement) {
 	card.style.opacity = '1';
 }
 
-export function hideCard() {
+export function hideCard(immediate = false) {
+	if (immediate) {
+		if (hideTimeout) clearTimeout(hideTimeout);
+		const card = getFloatingCard();
+		card.style.opacity = '0';
+		card.style.display = 'none';
+		return;
+	}
 	hideTimeout = setTimeout(() => {
 		const card = getFloatingCard();
 		card.style.opacity = '0';

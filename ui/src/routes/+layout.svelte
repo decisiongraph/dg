@@ -5,14 +5,21 @@
 	import SiteHeader from '$lib/components/site-header.svelte';
 	import SearchCommand from '$lib/components/SearchCommand.svelte';
 	import { onMount } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
 	import { siteMeta } from '$lib/stores/site-meta';
 	import { base } from '$app/paths';
+	import { hideCard } from '$lib/actions/user-mentions';
 
 	let { children } = $props();
 
 	onMount(() => {
 		// Remove pre-mount loading indicator now that SvelteKit has rendered
 		document.getElementById('dg-loading')?.remove();
+	});
+
+	// Dismiss any open hover cards on navigation
+	beforeNavigate(() => {
+		hideCard(true);
 	});
 
 	$effect(() => {
