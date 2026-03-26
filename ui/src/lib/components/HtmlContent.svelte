@@ -225,6 +225,9 @@
 			while (sibling && !/^H[1-6]$/.test(sibling.tagName)) {
 				if (sibling.tagName === 'TABLE') {
 					const thead = sibling.querySelector('thead tr');
+					// Skip if table already has a # column
+					const firstTh = thead?.querySelector('th');
+					if (firstTh?.textContent?.trim() === '#') break;
 					if (thead) {
 						const th = document.createElement('th');
 						th.textContent = '#';
