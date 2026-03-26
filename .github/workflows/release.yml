@@ -53,8 +53,14 @@ jobs:
         if: runner.os == 'Windows'
         uses: shogo82148/actions-setup-perl@v1
 
+      - name: Pre-build SPA for cross (bun not available inside container)
+        if: matrix.use_cross
+        run: cd ui && bun install && bun run build
+
       - name: Build (cross)
         if: matrix.use_cross
+        env:
+          DG_SKIP_UI_BUILD: "1"
         run: cross build --release --target ${{ matrix.target }} -p dg-cli -p dg-mcp
 
       - name: Build (cargo)
