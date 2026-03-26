@@ -29,6 +29,8 @@
 	import ShieldIcon from '@lucide/svelte/icons/shield';
 	import AlertTriangleIcon from '@lucide/svelte/icons/triangle-alert';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
+	import WorkflowIcon from '@lucide/svelte/icons/workflow';
+	import FolderIcon from '@lucide/svelte/icons/folder';
 	import type { Component } from 'svelte';
 
 	onMount(() => {
@@ -40,7 +42,8 @@
 		pol: ShieldIcon,
 		adr: BoxesIcon,
 		spec: FileTextIcon,
-		inc: AlertTriangleIcon
+		inc: AlertTriangleIcon,
+		proc: WorkflowIcon
 	};
 
 	const typeList = $derived(Object.entries($docTypes));
@@ -113,8 +116,35 @@
 				'Leaked API keys in public repository',
 				'Deployment pipeline failure blocked releases for 2 days'
 			]
+		},
+		{
+			key: 'proc',
+			title: 'Processes',
+			description:
+				'Process documents capture how work gets done — step-by-step procedures, workflows, and standard operating procedures. They include inputs, outputs, roles, and a visual process flow diagram.',
+			when: 'A business process needs to be documented, standardized, or reviewed — especially when onboarding new team members or auditing operations.',
+			examples: [
+				'Customer onboarding and KYC verification flow',
+				'Automated service fee calculation for material deposits',
+				'Monthly financial reporting and reconciliation process'
+			]
 		}
 	];
+
+	/** Schema types not in the hardcoded list — rendered as dynamic cards */
+	const knownKeys = new Set(docTypeCards.map((c) => c.key));
+	const customTypes = $derived(
+		$schemaData
+			? Object.entries($schemaData.types)
+					.filter(([key]) => !knownKeys.has(key))
+					.map(([key, info]) => ({
+						key,
+						title: $docTypes[key]?.display ?? key.toUpperCase(),
+						description: info.description ?? '',
+						folder: $docTypes[key]?.folder ?? key
+					}))
+			: []
+	);
 
 	/** Build the org actor lines if legal entities are defined */
 	const orgNames = $derived(
@@ -668,6 +698,49 @@
 								<div class="text-xs font-medium text-foreground mb-1">Each document follows a <strong>status lifecycle</strong>:</div>
 								<div class="overflow-x-auto rounded border border-border/50 bg-muted/30 px-3 py-2">
 									<LifecycleFlow nodes={lifecycleNodes(card.key)} docType={card.key} />
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/each}
+
+				<!-- Custom types from schema (not in hardcoded list) -->
+				{#each customTypes as ct}
+					{@const docCount = $allDocs.filter((d) => d.type === ct.key).length}
+					<div class="rounded-lg border border-border bg-card p-5 shadow-sm">
+						<div class="flex items-center justify-between mb-2">
+							<a
+								href="/{ct.folder}"
+								class="text-base font-semibold text-primary hover:underline flex items-center gap-2"
+							>
+								<FolderIcon class="size-4" />
+								{ct.title}
+							</a>
+							<span class="text-xs text-muted-foreground font-mono"
+								>./docs/{ct.folder}/{ct.key.toUpperCase()}-*.md</span
+							>
+						</div>
+						{#if ct.description}
+							<p class="text-sm text-foreground leading-relaxed mb-3">{ct.description}</p>
+						{/if}
+						{#if docCount > 0}
+							<div class="mt-3 text-xs">
+								<a href="/{ct.folder}" class="text-primary hover:underline">
+									Your project has {docCount}
+									{ct.title.toLowerCase()}
+									{docCount === 1 ? 'document' : 'documents'}.
+								</a>
+							</div>
+						{:else}
+							<div class="mt-3 text-xs text-muted-foreground">
+								You don't yet have any {ct.title.toLowerCase()}.
+							</div>
+						{/if}
+						{#if lifecycleNodes(ct.key).length > 0}
+							<div class="mt-3">
+								<div class="text-xs font-medium text-foreground mb-1">Each document follows a <strong>status lifecycle</strong>:</div>
+								<div class="overflow-x-auto rounded border border-border/50 bg-muted/30 px-3 py-2">
+									<LifecycleFlow nodes={lifecycleNodes(ct.key)} docType={ct.key} />
 								</div>
 							</div>
 						{/if}
