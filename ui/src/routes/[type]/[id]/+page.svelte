@@ -552,7 +552,7 @@
 											/>
 											<span class="text-[10px] text-muted-foreground">{commit.date}</span>
 										</span>
-										<span class="text-xs font-medium leading-snug text-foreground line-clamp-2 break-words">{commit.subject}</span>
+										<span class="text-xs font-medium leading-snug text-foreground line-clamp-2 break-words" title={commit.body_context ? `${commit.subject}\n\n${commit.body_context}` : commit.subject}>{commit.subject}</span>
 										{#if commit.body_context}
 											<span class="text-[10px] text-muted-foreground/80 leading-snug line-clamp-2 break-words italic">{commit.body_context}</span>
 										{/if}
