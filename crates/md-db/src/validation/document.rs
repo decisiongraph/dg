@@ -660,7 +660,7 @@ fn validate_field_value(
         },
         FieldType::User => {
             if let Some(s) = val.as_str() {
-                validate_user_ref(field_name, s, user_config, false, diags);
+                validate_user_ref(field_name, s, user_config, false, false, diags);
             } else {
                 diags.push(type_mismatch(field_name, "user (@handle)", val));
             }
@@ -673,6 +673,7 @@ fn validate_field_value(
                             &format!("{field_name}[{i}]"),
                             s,
                             user_config,
+                            false,
                             false,
                             diags,
                         );
@@ -815,6 +816,7 @@ fn validate_user_ref(
     value: &str,
     user_config: Option<&OrgConfig>,
     require_at: bool,
+    skip_departed: bool,
     diags: &mut Vec<Diagnostic>,
 ) {
     // In markdown content, @ prefix is required to distinguish user refs from text
@@ -871,7 +873,7 @@ fn validate_user_ref(
                     Some(format!("known: {}", all_refs.join(", ")))
                 },
             });
-        } else if config.is_departed_user(&normalized) {
+        } else if !skip_departed && config.is_departed_user(&normalized) {
             diags.push(Diagnostic {
                 severity: Severity::Warning,
                 code: "U012".into(),
@@ -883,6 +885,12 @@ fn validate_user_ref(
             });
         }
     }
+}
+
+/// Sections whose data is inherently historical — departed users are expected.
+fn is_historical_section(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.contains("history") || lower == "timeline"
 }
 
 /// Validate an org reference.
@@ -1220,11 +1228,16 @@ fn validate_table_columns(
                         }
                         continue;
                     }
+                    let skip_departed = is_historical_section(section_name)
+                        || table
+                            .get_cell("Status", row_idx)
+                            .is_some_and(|s| s.trim().eq_ignore_ascii_case("completed"));
                     validate_user_ref(
                         &format!("table:{section_name}.{}.row{row_idx}", col_def.name),
                         cell,
                         user_config,
                         true,
+                        skip_departed,
                         diags,
                     );
                 }
