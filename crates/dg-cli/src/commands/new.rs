@@ -178,7 +178,7 @@ fn warn_future_dates(fields: &[(String, String)], type_def: &TypeDef) {
     }
 }
 
-/// Parse "YYYY-MM-DD..." to epoch days, returns None if unparseable.
+/// Parse "YYYY-MM-DD..." to epoch days, returns None if unparsable.
 fn parse_date_to_epoch_days(s: &str) -> Option<i64> {
     let date_part = if s.len() >= 10 { &s[..10] } else { s };
     let mut parts = date_part.split('-');

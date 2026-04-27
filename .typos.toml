@@ -1,0 +1,19 @@
+# See https://github.com/crate-ci/typos/blob/master/docs/reference.md to configure typos
+
+[default]
+extend-ignore-re = [
+    "Caf&eacute;",]
+
+[default.extend-identifiers]
+activeOpps = "activeOpps"
+fo = "fo"
+
+[default.extend-words]
+Anly = "Anly"
+hom = "hom"
+ratatui = "ratatui"
+oint = "oint"
+OT = "OT"
+
+[files]
+extend-exclude = ["crates/gherkin/tests/fixtures/invalid_syntax.md"]
