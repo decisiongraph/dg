@@ -279,7 +279,7 @@ pub fn run(
     let slug = parsed
         .title
         .as_deref()
-        .map(slugify_title)
+        .map(template::slugify)
         .unwrap_or_default();
     let filename = if slug.is_empty() {
         bail!("title is required (used for filename slug)");
@@ -315,19 +315,6 @@ pub fn run(
     }
 
     Ok(())
-}
-
-/// Convert a title to a URL-friendly slug for filenames.
-fn slugify_title(title: &str) -> String {
-    title
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
 }
 
 #[cfg(test)]
