@@ -40,14 +40,29 @@ fn main() {
             // Clean stale build output to prevent hash-mismatched chunks
             let _ = std::fs::remove_dir_all(build_dir.join("_app"));
 
-            // Build SvelteKit
-            let status = std::process::Command::new("bun")
-                .current_dir(&ui_dir)
-                .args(["run", "build"])
-                .status()
-                .expect("Failed to run bun run build");
-            if !status.success() {
-                panic!("SvelteKit build failed");
+            // Build SvelteKit. bun's underlying libuv occasionally aborts with a
+            // kqueue EINTR assertion (SIGABRT) when a signal interrupts its event
+            // loop poll — a transient, environment-level flake unrelated to our
+            // code. Retry a few times before giving up.
+            let mut last_status = None;
+            for attempt in 1..=3 {
+                let status = std::process::Command::new("bun")
+                    .current_dir(&ui_dir)
+                    .args(["run", "build"])
+                    .status()
+                    .expect("Failed to run bun run build");
+                if status.success() {
+                    last_status = Some(status);
+                    break;
+                }
+                eprintln!(
+                    "cargo:warning=SvelteKit build attempt {attempt}/3 failed ({status}), retrying"
+                );
+                let _ = std::fs::remove_dir_all(build_dir.join("_app"));
+                last_status = Some(status);
+            }
+            if !last_status.map(|s| s.success()).unwrap_or(false) {
+                panic!("SvelteKit build failed after 3 attempts");
             }
         }
         _ => {

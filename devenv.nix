@@ -45,8 +45,11 @@ let
 in
 
 {
-  # Enable Rust toolchain (uses nixpkgs default)
+  # Enable Rust toolchain. Use the "stable" channel (via rust-overlay) instead of
+  # the nixpkgs default, which lags behind and breaks deps that require newer
+  # rustc (e.g. kdl 6.7 needs rustc >= 1.95).
   languages.rust.enable = true;
+  languages.rust.channel = "stable";
 
   # Additional packages
   packages = with pkgs; [
