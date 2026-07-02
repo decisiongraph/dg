@@ -42,6 +42,22 @@ let
     echo "All checks passed." >&2
   '';
 
+  # Prebuilt JetBrains Mono release. The nixpkgs package builds from source via
+  # gftools/afdko, whose test suite fails on macOS. We only need the woff2 files.
+  jetbrainsMonoPrebuilt = pkgs.stdenvNoCC.mkDerivation rec {
+    pname = "jetbrains-mono";
+    version = "2.304";
+    src = pkgs.fetchzip {
+      url = "https://github.com/JetBrains/JetBrainsMono/releases/download/v${version}/JetBrainsMono-${version}.zip";
+      stripRoot = false;
+      hash = "sha256-rv5A3F1zdcUJkmw09st1YxmEIkIoYJaMYGyZjic8jfc=";
+    };
+    installPhase = ''
+      mkdir -p $out/share/fonts/WOFF2
+      cp fonts/webfonts/*.woff2 $out/share/fonts/WOFF2/
+    '';
+  };
+
 in
 
 {
@@ -62,7 +78,7 @@ in
     opencode # AI coding agent for the terminal
     # Fonts (for copying to static folder)
     inter
-    jetbrains-mono
+    jetbrainsMonoPrebuilt
   ];
 
   # Browser automation for testing (Chromium)
@@ -334,7 +350,7 @@ in
     # Copy fonts from Nix store to static folder for rust-embed
     mkdir -p "$DEVENV_ROOT/src/serve/static/fonts"
     cp ${pkgs.inter}/share/fonts/truetype/InterVariable.ttf "$DEVENV_ROOT/src/serve/static/fonts/" 2>/dev/null || true
-    cp ${pkgs.jetbrains-mono}/share/fonts/WOFF2/JetBrainsMono-Regular.woff2 "$DEVENV_ROOT/src/serve/static/fonts/" 2>/dev/null || true
+    cp ${jetbrainsMonoPrebuilt}/share/fonts/WOFF2/JetBrainsMono-Regular.woff2 "$DEVENV_ROOT/src/serve/static/fonts/" 2>/dev/null || true
 
     # Download Tailwind CSS v4 standalone (required for DaisyUI v5)
     if [ ! -f "$DEVENV_ROOT/src/serve/static/tailwindcss" ]; then
