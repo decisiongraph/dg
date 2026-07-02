@@ -14,7 +14,14 @@ impl Frontmatter {
     /// Parse frontmatter from raw file content. Returns (Frontmatter, body).
     pub fn parse(raw: &str) -> Result<(Self, String)> {
         let matter = Matter::<YAML>::new();
-        let result = matter.parse(raw);
+        let result = match matter.parse::<gray_matter::Pod>(raw) {
+            Ok(result) => result,
+            Err(e) => {
+                return Err(Error::FrontmatterParse(format!(
+                    "invalid YAML syntax in frontmatter ({e})"
+                )))
+            }
+        };
 
         let data: BTreeMap<String, Value> = match result.data {
             Some(pod) => match pod.deserialize::<BTreeMap<String, Value>>() {

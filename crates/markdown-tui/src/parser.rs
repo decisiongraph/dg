@@ -25,6 +25,6 @@ fn comrak_options() -> Options<'static> {
     opts.extension.description_lists = true;
     opts.extension.superscript = true;
     opts.parse.smart = true;
-    opts.render.unsafe_ = true; // allow raw HTML for <details>, <kbd> etc
+    opts.render.r#unsafe = true; // allow raw HTML for <details>, <kbd> etc
     opts
 }

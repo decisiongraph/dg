@@ -231,7 +231,7 @@ fn detect_task_status<'a>(item_node: &'a AstNode<'a>) -> Option<bool> {
             if let Some(inline) = first_child.children().next() {
                 let iast = inline.data.borrow();
                 if let NodeValue::TaskItem(checked) = &iast.value {
-                    let c = checked.is_some();
+                    let c = checked.symbol.is_some();
                     drop(iast);
                     return Some(c);
                 }

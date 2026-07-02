@@ -358,15 +358,13 @@ fn check_stale_document(
                 }
             }
         }
-        Some("inc") => {
-            if status != "resolved" && status != "postmortem" {
-                suggestions.push(Suggestion {
-                    severity: SuggestSeverity::Info,
-                    category: SuggestCategory::StaleDocument,
-                    message: format!("unresolved incident (status: {status})"),
-                    hint: Some("resolve the incident and complete the postmortem".into()),
-                });
-            }
+        Some("inc") if status != "resolved" && status != "postmortem" => {
+            suggestions.push(Suggestion {
+                severity: SuggestSeverity::Info,
+                category: SuggestCategory::StaleDocument,
+                message: format!("unresolved incident (status: {status})"),
+                hint: Some("resolve the incident and complete the postmortem".into()),
+            });
         }
         _ => {}
     }

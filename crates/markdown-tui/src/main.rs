@@ -135,7 +135,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn run_app<B: ratatui::backend::Backend>(
+fn run_app<B: ratatui::backend::Backend<Error = io::Error>>(
     terminal: &mut Terminal<B>,
     app: &mut App,
 ) -> io::Result<()> {

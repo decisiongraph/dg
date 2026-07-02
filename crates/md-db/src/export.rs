@@ -52,7 +52,7 @@ fn encode_json_str(s: &str) -> String {
 }
 
 /// Render a Document's markdown body to HTML using comrak.
-/// Raw HTML blocks in markdown are stripped (unsafe_ = false) to prevent XSS.
+/// Raw HTML blocks in markdown are stripped (r#unsafe = false) to prevent XSS.
 pub fn render_markdown_to_html(body: &str) -> String {
     // Insert hard line break (backslash) before └► so it renders on its own line
     let body = body.replace("\n└►", "  \n└►");
@@ -63,11 +63,11 @@ pub fn render_markdown_to_html(body: &str) -> String {
     opts.extension.autolink = true;
     opts.extension.footnotes = true;
     opts.extension.alerts = true;
-    opts.render.unsafe_ = false;
+    opts.render.r#unsafe = false;
     let root = comrak::parse_document(&arena, &body, &opts);
-    let mut html = Vec::new();
-    comrak::format_html(root, &opts, &mut html).unwrap_or_default();
-    String::from_utf8_lossy(&html).to_string()
+    let mut html = String::new();
+    let _ = comrak::format_html(root, &opts, &mut html);
+    html
 }
 
 /// Build a frontmatter metadata grid (key/value pills, not a table).

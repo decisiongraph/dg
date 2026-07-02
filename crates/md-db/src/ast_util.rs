@@ -13,7 +13,7 @@ pub fn comrak_opts() -> Options<'static> {
 
 /// Parse markdown body into a comrak AST using standard options.
 /// Caller provides the arena so the returned node borrows from it.
-pub fn parse_md<'a>(arena: &'a Arena<AstNode<'a>>, body: &str) -> &'a AstNode<'a> {
+pub fn parse_md<'a>(arena: &'a Arena<'a>, body: &str) -> &'a AstNode<'a> {
     comrak::parse_document(arena, body, &comrak_opts())
 }
 

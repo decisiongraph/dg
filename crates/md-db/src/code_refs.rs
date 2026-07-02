@@ -442,8 +442,8 @@ pub fn scan_commit_refs(root: &Path, schema: &Schema, cache: &mut CodeRefCache) 
         };
 
         let msg = match commit.message() {
-            Some(m) => m,
-            None => continue,
+            Ok(m) => m,
+            Err(_) => continue,
         };
 
         // Skip special commits
@@ -545,10 +545,10 @@ pub fn scan_commit_refs(_root: &Path, _schema: &Schema, _cache: &mut CodeRefCach
 pub fn detect_repo_web_url(root: &Path) -> Option<(String, String)> {
     let repo = git2::Repository::discover(root).ok()?;
     let remotes = repo.remotes().ok()?;
-    let remote_name = if remotes.iter().any(|n| n == Some("origin")) {
+    let remote_name = if remotes.iter().any(|n| matches!(n, Ok(Some("origin")))) {
         "origin"
     } else if remotes.len() == 1 {
-        remotes.get(0)?
+        remotes.get(0).ok()??
     } else {
         if remotes.len() > 1 {
             eprintln!(
@@ -559,12 +559,12 @@ pub fn detect_repo_web_url(root: &Path) -> Option<(String, String)> {
         return None;
     };
     let remote = repo.find_remote(remote_name).ok()?;
-    let url_str = remote.url()?;
+    let url_str = remote.url().ok()?;
     let web_url = git_remote_to_web_url(url_str)?;
     let branch = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(|s| s.to_string()))
+        .and_then(|h| h.shorthand().ok().map(|s| s.to_string()))
         .unwrap_or_else(|| "main".to_string());
     Some((web_url, branch))
 }
@@ -608,8 +608,8 @@ pub fn detect_submodule_urls(root: &Path) -> std::collections::HashMap<String, (
     for sm in &submodules {
         let sm_path = sm.path().to_string_lossy().to_string();
         let url_str = match sm.url() {
-            Some(u) => u,
-            None => continue,
+            Ok(Some(u)) => u,
+            _ => continue,
         };
         let web_url = match git_remote_to_web_url(url_str) {
             Some(u) => u,
@@ -622,10 +622,10 @@ pub fn detect_submodule_urls(root: &Path) -> std::collections::HashMap<String, (
             .ok()
             .and_then(|r| {
                 let remotes = r.remotes().ok()?;
-                let remote_name = if remotes.iter().any(|n| n == Some("origin")) {
+                let remote_name = if remotes.iter().any(|n| matches!(n, Ok(Some("origin")))) {
                     "origin".to_string()
                 } else if remotes.len() == 1 {
-                    remotes.get(0)?.to_string()
+                    remotes.get(0).ok()??.to_string()
                 } else {
                     if remotes.len() > 1 {
                         eprintln!(
@@ -642,6 +642,8 @@ pub fn detect_submodule_urls(root: &Path) -> std::collections::HashMap<String, (
                     .ok()
                     .and_then(|sym| {
                         sym.symbolic_target()
+                            .ok()
+                            .flatten()
                             .and_then(|s| s.strip_prefix(&prefix))
                             .map(|b| b.to_string())
                     })

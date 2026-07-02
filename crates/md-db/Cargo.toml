@@ -7,8 +7,8 @@ description = "Markdown-as-Database library — structured documents with YAML f
 repository = "https://github.com/decisiongraph/md-db-rs"
 
 [dependencies]
-comrak = { version = "0.36", default-features = false }
-gray_matter = "0.2"
+comrak = { version = "0.53", default-features = false }
+gray_matter = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
@@ -23,17 +23,17 @@ ignore = "0.4"
 rust-embed = { version = "8", features = ["include-exclude"] }
 lazy_static = "1"
 anyhow = "1"
-toml = "0.8"
+toml = "1"
 ureq = { version = "3", optional = true }
 graphs-tui = { version = "0.4.0", optional = true }
 dg-gherkin = { workspace = true, optional = true }
-git2 = { version = "0.19", optional = true }
+git2 = { version = "0.21", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
 
 [features]
-syntax-highlight = ["comrak/syntect"]
+syntax-highlight = ["comrak/syntect-fancy"]
 diagrams = ["dep:graphs-tui"]
 gherkin = ["dep:dg-gherkin"]
 git = ["dep:git2"]

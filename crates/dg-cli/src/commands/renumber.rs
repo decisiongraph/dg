@@ -72,7 +72,7 @@ pub fn run(root: &Path, schema: &Schema, args: &RenumberArgs) -> Result<()> {
 fn check_git_remote(root: &Path) -> Option<String> {
     let repo = git2::Repository::open(root).ok()?;
     let head = repo.head().ok()?;
-    let branch_name = head.shorthand()?;
+    let branch_name = head.shorthand().ok()?;
     let branch = repo
         .find_branch(branch_name, git2::BranchType::Local)
         .ok()?;

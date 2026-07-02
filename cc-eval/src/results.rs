@@ -75,7 +75,7 @@ pub fn get_git_info(repo_path: &Path) -> (Option<String>, Option<String>) {
     let branch = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(|s| s.to_string()));
+        .and_then(|h| h.shorthand().ok().map(|s| s.to_string()));
 
     (commit, branch)
 }
