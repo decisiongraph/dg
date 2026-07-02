@@ -158,6 +158,7 @@ export interface ServiceEntry {
 	owner_team?: string;
 	description: string;
 	readme_path: string;
+	source_url?: string;
 	body_html: string;
 	primary_language: string;
 	languages: ServiceLanguage[];

@@ -286,7 +286,7 @@ function process(node: HTMLElement) {
 		if ((trigger as any).__docRefHover) continue;
 		(trigger as any).__docRefHover = true;
 		trigger.addEventListener('mouseenter', () => showCard(trigger));
-		trigger.addEventListener('mouseleave', hideCard);
+		trigger.addEventListener('mouseleave', () => hideCard());
 	}
 }
 
@@ -369,6 +369,6 @@ export function enrichExistingDocLinks(node: HTMLElement) {
 		}
 
 		a.addEventListener('mouseenter', () => showCard(a));
-		a.addEventListener('mouseleave', hideCard);
+		a.addEventListener('mouseleave', () => hideCard());
 	}
 }

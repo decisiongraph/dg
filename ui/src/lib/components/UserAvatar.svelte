@@ -40,7 +40,7 @@
 	bind:this={triggerEl}
 	class="group/mention relative inline-flex items-center"
 	onmouseenter={onEnter}
-	onmouseleave={hideCard}
+	onmouseleave={() => hideCard()}
 	onclick={(e) => e.stopPropagation()}
 >
 	{#if avatarUrl}

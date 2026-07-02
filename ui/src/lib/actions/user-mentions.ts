@@ -182,7 +182,7 @@ function attachHoverListeners(node: HTMLElement) {
 	const triggers = node.querySelectorAll('.group\\/mention');
 	for (const trigger of triggers) {
 		trigger.addEventListener('mouseenter', () => showCard(trigger as HTMLElement));
-		trigger.addEventListener('mouseleave', hideCard);
+		trigger.addEventListener('mouseleave', () => hideCard());
 	}
 }
 
