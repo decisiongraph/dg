@@ -11,7 +11,7 @@ members = [
 exclude = ["cc-eval"]
 
 [workspace.package]
-version = "0.1.7"
+version = "0.1.8"
 
 [workspace.dependencies]
 md-db = { path = "crates/md-db", features = ["diagrams", "gherkin"] }
