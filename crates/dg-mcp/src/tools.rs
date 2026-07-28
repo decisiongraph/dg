@@ -376,6 +376,22 @@ fn tool_new(args: &Value) -> Result<Value> {
         }
     }
 
+    // `title` feeds the template's "title" override (-> H1) and the auto-id slug.
+    // An explicit `title=` in `fields` wins over the dedicated `title` arg.
+    let title = str_arg(args, "title");
+    if let Some(ref t) = title {
+        if !set_fields.iter().any(|(k, _)| k == "title") {
+            set_fields.push(("title".to_string(), t.clone()));
+        }
+    }
+    // LAST `title=` wins, matching the template's H1 (BTreeMap insert overwrites),
+    // so the slug and the H1 cannot disagree.
+    let effective_title = set_fields
+        .iter()
+        .rev()
+        .find(|(k, _)| k == "title")
+        .map(|(_, v)| v.clone());
+
     let fill = bool_arg(args, "fill");
     let auto_id = bool_arg(args, "auto_id");
 
@@ -384,7 +400,27 @@ fn tool_new(args: &Value) -> Result<Value> {
         let graph = DocGraph::build(PathBuf::from(&dir), &schema)?;
         let next_id = graph.next_id(canonical_type);
         let folder = type_def.folder.as_deref().unwrap_or(".");
-        let filename = format!("{}.md", next_id.to_lowercase());
+        let slug = effective_title
+            .as_deref()
+            .map(template::slugify)
+            .unwrap_or_default();
+        // Match the CLI exactly: under auto_id a title is required and must yield a
+        // non-empty slug. A missing title — or one that slugifies to nothing
+        // (punctuation- or non-ASCII-only) — would produce a bare `{id}.md` that
+        // fails F011, so refuse it loudly instead of writing an invalid document.
+        if slug.is_empty() {
+            match &effective_title {
+                None => anyhow::bail!(
+                    "title is required under auto_id (used for the filename slug); \
+                     pass a `title` with ASCII letters or digits"
+                ),
+                Some(t) => anyhow::bail!(
+                    "title {t:?} produces an empty filename slug (only punctuation or \
+                     non-ASCII characters); provide a title with ASCII letters or digits"
+                ),
+            }
+        }
+        let filename = format!("{}-{slug}.md", next_id.to_lowercase());
         let base = PathBuf::from(&dir);
         if folder != "." && base.ends_with(folder) {
             Some(base.join(filename))
@@ -607,4 +643,92 @@ fn tool_check_code(args: &Value) -> Result<Value> {
         "matches": items,
         "count": items.len(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const FIXTURE_SCHEMA: &str = "../../tests/fixtures/schema.kdl";
+
+    fn new_adr(dir: &std::path::Path, args: serde_json::Value) -> Result<Value> {
+        let mut base = json!({
+            "type": "adr",
+            "schema": FIXTURE_SCHEMA,
+            "auto_id": true,
+            "dir": dir.to_str().unwrap(),
+            "fields": ["author=example", "status=proposed"],
+        });
+        let obj = base.as_object_mut().unwrap();
+        for (k, v) in args.as_object().unwrap() {
+            obj.insert(k.clone(), v.clone());
+        }
+        tool_new(&base)
+    }
+
+    #[test]
+    fn title_arg_sets_h1_and_slug() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out = new_adr(tmp.path(), json!({ "title": "SDK Architecture" })).unwrap();
+        let path = out["path"].as_str().unwrap();
+        assert!(
+            path.ends_with("docs/architecture/adr-001-sdk-architecture.md"),
+            "{path}"
+        );
+        assert!(out["content"]
+            .as_str()
+            .unwrap()
+            .contains("# SDK Architecture"));
+    }
+
+    #[test]
+    fn explicit_field_title_wins_over_title_arg() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out = new_adr(
+            tmp.path(),
+            json!({ "title": "From Arg", "fields": ["author=example", "title=From Field"] }),
+        )
+        .unwrap();
+        assert!(out["path"]
+            .as_str()
+            .unwrap()
+            .ends_with("adr-001-from-field.md"));
+        assert!(out["content"].as_str().unwrap().contains("# From Field"));
+    }
+
+    #[test]
+    fn duplicate_title_slug_matches_h1() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out = new_adr(
+            tmp.path(),
+            json!({ "fields": ["author=example", "title=First Alpha", "title=Second Beta"] }),
+        )
+        .unwrap();
+        // last title wins for BOTH the H1 and the slug
+        assert!(out["path"]
+            .as_str()
+            .unwrap()
+            .ends_with("adr-001-second-beta.md"));
+        assert!(out["content"].as_str().unwrap().contains("# Second Beta"));
+    }
+
+    #[test]
+    fn empty_slug_title_is_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        // non-ASCII-only title slugifies to nothing -> must error, not write {id}.md
+        let err = new_adr(tmp.path(), json!({ "title": "データベース移行" })).unwrap_err();
+        assert!(err.to_string().contains("empty filename slug"), "{err}");
+        // and nothing was written
+        assert!(!tmp.path().join("docs/architecture/adr-001.md").exists());
+    }
+
+    #[test]
+    fn no_title_under_auto_id_is_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        // under auto_id a title is required (CLI parity); a bare {id}.md fails F011
+        let err = new_adr(tmp.path(), json!({})).unwrap_err();
+        assert!(err.to_string().contains("title is required"), "{err}");
+        assert!(!tmp.path().join("docs/architecture/adr-001.md").exists());
+    }
 }

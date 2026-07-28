@@ -116,6 +116,7 @@ fn tool_list() -> Value {
                 "type": "object",
                 "properties": {
                     "type":    { "type": "string",  "description": "Document type name" },
+                    "title":   { "type": "string",  "description": "Document title — sets the H1 heading and (under auto_id) the filename slug. Under auto_id a title is REQUIRED and must contain ASCII letters/digits: a missing title, or one that slugifies to nothing (punctuation-/non-ASCII-only), is rejected, matching the CLI. With an explicit `output` path the title is optional and only sets the H1." },
                     "schema":  { "type": "string",  "description": "Path to KDL schema file" },
                     "output":  { "type": "string",  "description": "Output file path" },
                     "dir":     { "type": "string",  "description": "Directory for auto-ID" },

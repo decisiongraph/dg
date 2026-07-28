@@ -79,6 +79,20 @@ pub fn generate_document_opts(
     out
 }
 
+/// Title -> filename slug, shared by `dg new` (CLI) and the `dg-new` MCP tool so
+/// both derive identical filenames (e.g. `"Use PostgreSQL!"` -> `use-postgresql`).
+pub fn slugify(title: &str) -> String {
+    title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
 fn default_value(field_def: &FieldDef, fill: bool) -> Value {
     // Schema-defined default takes priority
     if let Some(ref default_str) = field_def.default {
@@ -525,5 +539,26 @@ type "test" {
         assert!(y >= 2024 && y <= 2100);
         assert!((1..=12).contains(&m));
         assert!((1..=31).contains(&d));
+    }
+
+    #[test]
+    fn test_slugify() {
+        assert_eq!(slugify("Use PostgreSQL!"), "use-postgresql");
+        assert_eq!(
+            slugify("SDK Architecture For Partner Integrations"),
+            "sdk-architecture-for-partner-integrations"
+        );
+        // leading / trailing / consecutive separators collapse
+        assert_eq!(slugify("  --Hello,, World--  "), "hello-world");
+        assert_eq!(slugify("a.b/c"), "a-b-c");
+        // path-traversal characters are neutralised to separators
+        assert_eq!(slugify("../../etc/passwd"), "etc-passwd");
+        // digits are kept
+        assert_eq!(slugify("ADR 42 v2"), "adr-42-v2");
+        // empty / punctuation-only / non-ASCII-only -> empty slug
+        assert_eq!(slugify(""), "");
+        assert_eq!(slugify("!!!"), "");
+        assert_eq!(slugify("データベース移行"), "");
+        assert_eq!(slugify("Привет"), "");
     }
 }
