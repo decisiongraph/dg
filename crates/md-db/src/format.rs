@@ -743,7 +743,7 @@ status: exploring
     }
 
     #[test]
-    fn test_format_file_rejects_unparseable_frontmatter() {
+    fn test_format_file_rejects_unparsable_frontmatter() {
         let dir = std::env::temp_dir().join("dg_fmt_test_bad_yaml");
         std::fs::create_dir_all(&dir).ok();
         let path = dir.join("test.md");
@@ -752,7 +752,7 @@ status: exploring
 
         let schema = test_schema();
         let result = format_file(&path, &schema, false);
-        assert!(result.is_err(), "should error on unparseable YAML");
+        assert!(result.is_err(), "should error on unparsable YAML");
 
         // File must be unchanged
         let content = std::fs::read_to_string(&path).unwrap();
