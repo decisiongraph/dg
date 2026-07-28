@@ -10,9 +10,9 @@ pub use types::{Diagnostic, FileResult, Severity, ValidationResult};
 // Re-export commonly used types for tests and internal use
 // Re-exports for test access (tests use `use super::*`)
 #[cfg(test)]
-use crate::document::{Document, ParsedBody};
+use crate::document::Document;
 #[cfg(test)]
-use crate::schema::{FieldDef, FieldType, Schema, SectionDef, TableDef, TypeDef};
+use crate::schema::Schema;
 #[cfg(test)]
 use crate::users::OrgConfig;
 #[cfg(test)]
@@ -24,7 +24,7 @@ pub(crate) use directory::{
 #[cfg(test)]
 pub(crate) use document::singleton_matches;
 #[cfg(test)]
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 #[cfg(test)]
 use std::path::{Path, PathBuf};
 

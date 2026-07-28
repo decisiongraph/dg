@@ -536,7 +536,7 @@ type "test" {
     fn test_civil_date_sanity() {
         // Just ensure it returns a plausible date
         let (y, m, d) = civil_date_from_epoch();
-        assert!(y >= 2024 && y <= 2100);
+        assert!((2024..=2100).contains(&y));
         assert!((1..=12).contains(&m));
         assert!((1..=31).contains(&d));
     }
