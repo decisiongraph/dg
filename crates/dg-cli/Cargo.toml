@@ -1,6 +1,6 @@
 [package]
 name = "dg-cli"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "DecisionGraph CLI — opinionated document management for decisions, policies, opportunities, and incidents"
 

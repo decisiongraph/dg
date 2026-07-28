@@ -9,6 +9,8 @@
 	const roadmapData = $derived(data.roadmap as RoadmapData | null);
 	const generatedAt = $derived(roadmapData?.generated_at);
 
+	let container: HTMLElement | undefined = $state();
+
 	/** Map doc type prefix to folder for SPA routes */
 	const prefixToFolder: Record<string, string> = {
 		adr: 'architecture',
@@ -38,6 +40,14 @@
 				}
 			}
 		});
+	});
+
+	/** Attach click delegation to the pre-rendered roadmap container (anchors are the real targets) */
+	$effect(() => {
+		const el = container;
+		if (!el) return;
+		el.addEventListener('click', handleClick);
+		return () => el.removeEventListener('click', handleClick);
 	});
 
 	/** Intercept clicks on .html links from pre-rendered roadmap and navigate via SPA */
@@ -81,8 +91,7 @@
 	</div>
 
 	{#if roadmapData?.html}
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="roadmap-container rounded-xl border bg-card p-6 shadow-sm" onclick={handleClick}>
+		<div class="roadmap-container rounded-xl border bg-card p-6 shadow-sm" bind:this={container}>
 			<HtmlContent html={roadmapData.html} />
 		</div>
 	{:else}

@@ -9,8 +9,25 @@ permissions:
   contents: write
 
 jobs:
+  version-check:
+    name: Assert tag matches Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare git tag with workspace version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')"
+          echo "git tag: ${TAG} | Cargo.toml: ${CARGO_VERSION}"
+          if [ "${TAG}" != "${CARGO_VERSION}" ]; then
+            echo "::error::Tag v${TAG} does not match workspace version ${CARGO_VERSION}. Bump [workspace.package] version in Cargo.toml before tagging."
+            exit 1
+          fi
+
   build:
     name: Build ${{ matrix.target }}
+    needs: version-check
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -123,6 +140,17 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
+      # Mint a short-lived token scoped to the tap repo. Replaces GH_PAT: no
+      # expiry to manage, and access is limited to decisiongraph/homebrew-tap.
+      - name: Mint a scoped token for the tap
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          owner: decisiongraph
+          repositories: homebrew-tap
+
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
@@ -131,27 +159,37 @@ jobs:
 
       - name: Update homebrew-tap formula
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           export VERSION="${TAG#v}"
-          git clone "https://x-access-token:${GH_PAT}@github.com/decisiongraph/homebrew-tap.git" tap
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/decisiongraph/homebrew-tap.git" tap
           cd tap
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
+          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+          git config user.name "${APP_SLUG}[bot]"
 
           python3 - <<'PYEOF'
-          import re, os, hashlib
+          import re, os, hashlib, sys
 
           def sha256(path):
               with open(path, "rb") as f:
                   return hashlib.sha256(f.read()).hexdigest()
 
+          def sub_once(pattern, repl, text, what, flags=0):
+              new, n = re.subn(pattern, repl, text, flags=flags)
+              if n != 1:
+                  sys.exit(f"::error::expected exactly 1 match for {what}, got {n}. "
+                           "Formula/dg.rb structure changed — refusing to publish a broken formula.")
+              return new
+
           version = os.environ["VERSION"]
           with open("Formula/dg.rb") as f:
               content = f.read()
 
-          content = re.sub(r'(version\s+")([^"]+)(")', rf'\g<1>{version}\g<3>', content)
+          # The download URLs interpolate #{version}, so only version + sha256 need updating.
+          content = sub_once(r'(version\s+")([^"]+)(")', rf'\g<1>{version}\g<3>', content, "version")
 
           assets = [
               "dg-aarch64-apple-darwin.tar.gz",
@@ -161,10 +199,10 @@ jobs:
           ]
           for asset in assets:
               digest = sha256(f"../dist/{asset}")
-              content = re.sub(
+              content = sub_once(
                   r'(url\s+"[^"]*' + re.escape(asset) + r'[^"]*"\n\s+sha256\s+")[a-f0-9]+(")',
                   rf'\g<1>{digest}\g<2>',
-                  content, flags=re.DOTALL
+                  content, f"sha256 of {asset}", flags=re.DOTALL,
               )
 
           with open("Formula/dg.rb", "w") as f:
@@ -172,5 +210,9 @@ jobs:
           PYEOF
 
           git add Formula/dg.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date for ${TAG}; nothing to commit."
+            exit 0
+          fi
           git commit --no-gpg-sign -m "chore: update dg to ${TAG}"
           git push origin HEAD

@@ -817,7 +817,7 @@ mod tests {
         assert_eq!(days_between("2025-01-14", "2025-01-15"), Some(-1));
         // ~90 days
         let diff = days_between("2025-04-15", "2025-01-15").unwrap();
-        assert!(diff >= 89 && diff <= 91);
+        assert!((89..=91).contains(&diff));
     }
 
     // ─── Incomplete markers ────────────────────────────────────────────────

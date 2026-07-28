@@ -518,42 +518,6 @@ fn prepend_number_column(rows: &mut [Vec<Vec<StyledSegment>>]) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{SegmentStyle, StyledSegment};
-
-    fn plain_cell(text: &str) -> Vec<StyledSegment> {
-        vec![StyledSegment {
-            text: text.to_string(),
-            style: SegmentStyle::default(),
-        }]
-    }
-
-    #[test]
-    fn test_prepend_number_column() {
-        let mut rows = vec![
-            vec![plain_cell("Name"), plain_cell("Score")],
-            vec![plain_cell("Alice"), plain_cell("8")],
-            vec![plain_cell("Bob"), plain_cell("6")],
-        ];
-        prepend_number_column(&mut rows);
-
-        assert_eq!(rows[0][0][0].text, "#");
-        assert_eq!(rows[1][0][0].text, "1");
-        assert_eq!(rows[2][0][0].text, "2");
-        assert_eq!(rows[0].len(), 3);
-        assert_eq!(rows[1].len(), 3);
-    }
-
-    #[test]
-    fn test_prepend_number_column_empty() {
-        let mut rows: Vec<Vec<Vec<StyledSegment>>> = vec![];
-        prepend_number_column(&mut rows);
-        assert!(rows.is_empty());
-    }
-}
-
 /// Render a table from raw string data (not from markdown AST).
 ///
 /// `headers` — column header labels
@@ -604,4 +568,40 @@ pub fn render_table_from_data(
     let alignments = vec![Alignment::Left; headers.len()];
     let lines = render_table_inner(&styled_rows, &alignments, options);
     RenderedBlock::Lines(lines)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{SegmentStyle, StyledSegment};
+
+    fn plain_cell(text: &str) -> Vec<StyledSegment> {
+        vec![StyledSegment {
+            text: text.to_string(),
+            style: SegmentStyle::default(),
+        }]
+    }
+
+    #[test]
+    fn test_prepend_number_column() {
+        let mut rows = vec![
+            vec![plain_cell("Name"), plain_cell("Score")],
+            vec![plain_cell("Alice"), plain_cell("8")],
+            vec![plain_cell("Bob"), plain_cell("6")],
+        ];
+        prepend_number_column(&mut rows);
+
+        assert_eq!(rows[0][0][0].text, "#");
+        assert_eq!(rows[1][0][0].text, "1");
+        assert_eq!(rows[2][0][0].text, "2");
+        assert_eq!(rows[0].len(), 3);
+        assert_eq!(rows[1].len(), 3);
+    }
+
+    #[test]
+    fn test_prepend_number_column_empty() {
+        let mut rows: Vec<Vec<Vec<StyledSegment>>> = vec![];
+        prepend_number_column(&mut rows);
+        assert!(rows.is_empty());
+    }
 }

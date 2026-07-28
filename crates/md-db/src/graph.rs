@@ -1129,7 +1129,7 @@ mod tests {
 
         // First build populates cache
         let g1 = DocGraph::build_cached("../../tests/fixtures", &schema, &mut cache).unwrap();
-        assert!(cache.len() > 0);
+        assert!(!cache.is_empty());
 
         // Second build reuses cache (no files changed)
         let g2 = DocGraph::build_cached("../../tests/fixtures", &schema, &mut cache).unwrap();

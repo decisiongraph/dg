@@ -10,6 +10,7 @@ use commands::Command;
 #[derive(Parser)]
 #[command(
     name = "dg",
+    version,
     about = "DecisionGraph — structured decision documentation"
 )]
 struct Cli {

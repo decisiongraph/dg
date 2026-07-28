@@ -428,7 +428,7 @@ fn adr_001_to_json() {
     assert_eq!(json["frontmatter"]["status"], "accepted");
     assert_eq!(json["frontmatter"]["author"], "onni");
     // Top-level section is the H1 title; H2s are subsections under it
-    assert!(json["sections"].as_array().unwrap().len() >= 1);
+    assert!(!json["sections"].as_array().unwrap().is_empty());
 }
 
 // ─── Schema parsing ─────────────────────────────────────────────────────────
