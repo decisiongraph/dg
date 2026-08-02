@@ -123,7 +123,7 @@ SiteConfig { title, roadmap: bool, users: bool, roadmap_html: Option<String> }
 
 ### Changing discovery / file scanning
 
-- `md-db/src/discovery.rs` — `discover_files(dir, pattern, filters, no_ignore)`. Respects `.gitignore`. Hardcoded ignore list for `.dg`, `.git`, `node_modules`, etc. `Filter` enum for frontmatter-based filtering.
+- `md-db/src/discovery.rs` — `discover_files(dir, pattern, filters, no_ignore)`. Respects `.gitignore` and `.dgignore` (`.gitignore` syntax, read hierarchically, higher precedence than `.gitignore` so negations can re-include gitignored docs). Both are skipped when `no_ignore` is true. Hardcoded ignore list for `.dg`, `.git`, `node_modules`, etc. `Filter` enum for frontmatter-based filtering.
 
 ### Changing suggestions
 
