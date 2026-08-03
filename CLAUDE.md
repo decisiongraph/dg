@@ -28,34 +28,29 @@ Parse & validate Gherkin scenarios from SPEC documents. Generate D2/Mermaid diag
 
 ## Code paths by change scenario
 
-### Changing the static site (`dg site` / `dg export --site`)
+### Changing the static site (`dg site` / `dg serve` / `dg export --site`)
 
-The site is generated as an mdbook-style static HTML site with sidebar, search, prev/next navigation.
+The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) embedded into the binary, plus per-project JSON data files generated at build time.
+
+**UI (`ui/`, package manager: bun):**
+- `ui/src/routes/` — pages: `+page.svelte` (index), `[type]/` + `[type]/[id]/` (doc lists/pages), `graph/`, `kanban/`, `roadmap/`, `onboarding/`, `org/`, `services/[slug]/`, `software/[kind]/[slug]/`, `tags/[tag]/`
+- `ui/src/lib/components/HtmlContent.svelte` — renders doc HTML incl. mermaid + d2 diagrams (d2 loads `/data/d2/d2-browser.js` at runtime)
+- `ui/src/lib/stores/` — loads `/data/*.json`
+- Build: `cd ui && bun install && bun run build` → `ui/build/`. `crates/md-db/build.rs` runs this automatically at compile time (`DG_SKIP_UI_BUILD=1` to skip); `ui/build/` is embedded via rust-embed in `md-db/src/site/embed.rs`.
+- UI dev loop: `dg serve -p 10050` in a test project + `cd ui && bun run dev` (vite proxies `/data`).
+
+**Data generation (`md-db/src/site/`):**
+- `mod.rs` — `generate_site()`: writes SPA files, discovers docs, builds graph, copies doc assets/avatars, fetches d2 bundle, writes per-route fallback `index.html`s. Returns file count.
+- `data.rs` — `generate_data_files()`: `docs.json`, `graph.json`, `org.json`, `services.json`, `nav.json`, `search-index.json`, `roadmap.json`, `site-meta.json`, `readme.json`, `assignments.json`, `code-refs.json`, `schema.json`
+- `embed.rs` — rust-embed of `ui/build/`
+- `SiteConfig` in `mod.rs`: `{ title, roadmap, users, roadmap_html, roadmap_generated_at, readme_html, logo_path, edit_url_prefix, is_local_dev }`
 
 **Entry points:**
-- `dg-cli/src/commands/site.rs` — `dg site` command (args, roadmap HTML building)
-- `dg-cli/src/commands/export.rs` — `dg export --site` (delegates to `site.rs` helpers)
+- `dg-cli/src/commands/site.rs` — `dg site` (roadmap/readme HTML pre-rendering, title/logo detection)
+- `dg-cli/src/commands/serve.rs` — `dg serve`: tiny_http server, SPA fallback routing, notify-based watcher + rebuild thread
+- `dg-cli/src/commands/export.rs` — `dg export --site`
 
-**Core generation (all in `md-db/src/site/`):**
-- `mod.rs` — `generate_site()` orchestrator: discovers docs, builds graph, groups by type, collects pages, wraps in layout, writes to disk. Returns page count.
-- `pages.rs` — Page generators: `intro_page()` (README→index), `onboarding_page()`, `doc_list_page()`, `doc_page()`, `team_pages()`, `user_pages()`, `org_pages()`, `graph_page()`, `roadmap_page()`
-- `layout.rs` — `render_page_layout()` wraps body+sidebar into full HTML
-- `nav.rs` — `build_nav_tree()`, `render_sidebar_html()`, `flat_page_order()`, `prev_next_links()`
-- `css.rs` — All CSS as a constant
-- `js.rs` — All JS as a constant (search, sidebar toggle, theme)
-- `search.rs` — `generate_search_index()` → JSON for client-side search
-
-**Supporting modules used by site:**
-- `md-db/src/export.rs` — `render_markdown_to_html()`, `frontmatter_meta()`, `linkify_refs()`, CSS/JS constants, `GRAPH_JS`
-- `md-db/src/graph.rs` — `DocGraph::build()` for backlinks
-- `md-db/src/discovery.rs` — `discover_files()` for finding documents
-- `md-db/src/roadmap.rs` — `build_roadmap()`, `render_roadmap_html()` for roadmap page
-- `md-db/src/users.rs` — `OrgConfig` for team/user/org pages
-
-**Config struct** (`md-db/src/site/mod.rs`):
-```rust
-SiteConfig { title, roadmap: bool, users: bool, roadmap_html: Option<String> }
-```
+**e2e tests:** `ui/e2e/` (Playwright, run `cd ui && bun run test:e2e`; fixture is a temp copy of `example/` served by the debug `dg` binary).
 
 ### Changing document types or schema
 

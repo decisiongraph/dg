@@ -1,5 +1,14 @@
 //! `dg serve` command — development server with live reload.
+//!
+//! The HTTP layer is a deliberately simple thread-per-connection server on
+//! `std::net::TcpListener` with `Connection: close` semantics. It replaced
+//! tiny_http, whose task pool could lose an accepted connection under
+//! concurrent load (all pooled threads blocked reading idle keep-alive
+//! connections + a lost condvar wakeup) — the browser then waited forever on
+//! a request the server never read, showing a blank page.
 
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -50,7 +59,7 @@ pub fn run(
     }
 
     // Start HTTP server — try requested port, auto-increment if busy
-    let (server, actual_port) = bind_server(&args.host, args.port)?;
+    let (listener, actual_port) = bind_server(&args.host, args.port)?;
 
     if actual_port != args.port {
         println!("Port {} in use, using {} instead", args.port, actual_port);
@@ -71,7 +80,7 @@ pub fn run(
     start_watcher(root, rebuild_flag.clone())?;
 
     // Serve HTTP requests
-    serve_with_server(server, &output, root, schema, users, cache, rebuild_flag)?;
+    serve_with_listener(listener, &output, root, schema, users, cache, rebuild_flag)?;
 
     Ok(())
 }
@@ -160,16 +169,12 @@ fn start_watcher(root: &Path, rebuild_flag: Arc<Mutex<bool>>) -> Result<()> {
             RecursiveMode::NonRecursive,
         );
 
-        // Debounce events (collect for 300ms before signaling rebuild)
-        let mut last_event = std::time::Instant::now();
-
+        // Signal on every relevant event; the rebuild loop's 300ms poll coalesces
+        // bursts. A trailing event during a rebuild re-sets the flag, so no save
+        // is ever silently dropped.
         for event in rx.into_iter().flatten() {
             if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
-                let now = std::time::Instant::now();
-                if now.duration_since(last_event) > Duration::from_millis(300) {
-                    *rebuild_flag.lock().unwrap() = true;
-                    last_event = now;
-                }
+                *rebuild_flag.lock().unwrap() = true;
             }
         }
     });
@@ -177,13 +182,13 @@ fn start_watcher(root: &Path, rebuild_flag: Arc<Mutex<bool>>) -> Result<()> {
     Ok(())
 }
 
-fn serve_with_server(
-    server: Arc<tiny_http::Server>,
+fn serve_with_listener(
+    listener: TcpListener,
     output: &Path,
     root: &Path,
     _schema: &Schema,
     _users: Option<&OrgConfig>,
-    _cache: &mut md_db::cache::DocCache,
+    cache: &mut md_db::cache::DocCache,
     rebuild_flag: Arc<Mutex<bool>>,
 ) -> Result<()> {
     let output = output.to_path_buf();
@@ -191,16 +196,18 @@ fn serve_with_server(
 
     println!("Watching for changes...");
 
-    // Spawn rebuild thread
+    // Spawn rebuild thread, seeded with the warm cache from the initial build
     let rebuild_output = output.clone();
     let rebuild_root = root.clone();
+    let mut cache_local = cache.clone();
     std::thread::spawn(move || {
-        let mut cache_local = md_db::cache::DocCache::default();
-
         loop {
             std::thread::sleep(Duration::from_millis(300));
 
             if *rebuild_flag.lock().unwrap() {
+                // Clear before rebuilding: events arriving mid-rebuild re-set the
+                // flag and trigger a follow-up rebuild on the next poll.
+                *rebuild_flag.lock().unwrap() = false;
                 println!("\n🔄 Change detected, rebuilding...");
 
                 // Reload schema and users (they might have changed)
@@ -210,7 +217,6 @@ fn serve_with_server(
                     Ok(s) => s,
                     Err(e) => {
                         eprintln!("✗ Schema parse error: {}", e);
-                        *rebuild_flag.lock().unwrap() = false;
                         continue;
                     }
                 };
@@ -228,110 +234,188 @@ fn serve_with_server(
                     Ok(_) => println!("✓ Rebuilt"),
                     Err(e) => eprintln!("✗ Build failed: {}", e),
                 }
-
-                *rebuild_flag.lock().unwrap() = false;
             }
         }
     });
 
     // Serve HTTP requests concurrently — browsers load SPAs with 6+ parallel
-    // requests for JS modules. Sequential handling causes white-screen race.
+    // requests for JS modules, each on its own connection (we always answer
+    // with Connection: close). Thread-per-connection is plenty for localhost.
     let output = Arc::new(output);
     let root = Arc::new(root);
-    loop {
-        let request = match server.recv() {
-            Ok(req) => req,
-            Err(_) => break,
-        };
+    for stream in listener.incoming() {
+        let Ok(stream) = stream else { continue };
         let output = Arc::clone(&output);
         let root = Arc::clone(&root);
         std::thread::spawn(move || {
-            let response = handle_request(&request, &output, &root);
-            let _ = request.respond(response);
+            handle_connection(stream, &output, &root);
         });
     }
 
     Ok(())
 }
 
-fn handle_request(
-    request: &tiny_http::Request,
-    output: &Path,
-    root: &Path,
-) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
-    let raw_url: &str = request.url();
+/// A minimal HTTP/1.1 response.
+struct HttpResponse {
+    status: u16,
+    content_type: &'static str,
+    cache_control: Option<&'static str>,
+    body: Vec<u8>,
+}
+
+impl HttpResponse {
+    fn new(status: u16, content_type: &'static str, body: Vec<u8>) -> Self {
+        Self {
+            status,
+            content_type,
+            cache_control: None,
+            body,
+        }
+    }
+
+    fn with_cache(mut self, value: &'static str) -> Self {
+        self.cache_control = Some(value);
+        self
+    }
+}
+
+/// Read one request from the connection, answer it, close the connection.
+fn handle_connection(stream: TcpStream, output: &Path, root: &Path) {
+    // Bound reads so an abandoned connection can't pin this thread forever
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
+
+    let mut reader = BufReader::new(match stream.try_clone() {
+        Ok(s) => s,
+        Err(_) => return,
+    });
+
+    // Request line: "GET /path?query HTTP/1.1"
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).is_err() {
+        return;
+    }
+    let mut parts = request_line.split_whitespace();
+    let (Some(method), Some(raw_url)) = (parts.next(), parts.next()) else {
+        return;
+    };
+    let method = method.to_string();
+    let raw_url = raw_url.to_string();
+
+    // Headers: we only need Content-Length to drain a request body
+    let mut content_length: usize = 0;
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {
+                let line = line.trim_end();
+                if line.is_empty() {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':') {
+                    if name.eq_ignore_ascii_case("content-length") {
+                        content_length = value.trim().parse().unwrap_or(0);
+                    }
+                }
+            }
+            Err(_) => return,
+        }
+    }
+
+    // Drain a bounded request body so the client can read our response cleanly
+    if content_length > 0 {
+        let mut body = vec![0u8; content_length.min(1_048_576)];
+        let _ = reader.read_exact(&mut body);
+    }
+
+    let response = handle_request(&method, &raw_url, output, root);
+    let _ = write_response(stream, &response);
+}
+
+fn write_response(mut stream: TcpStream, response: &HttpResponse) -> std::io::Result<()> {
+    let reason = match response.status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        _ => "OK",
+    };
+    let mut head = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        response.status,
+        reason,
+        response.content_type,
+        response.body.len()
+    );
+    if let Some(cache) = response.cache_control {
+        head.push_str(&format!("Cache-Control: {}\r\n", cache));
+    }
+    head.push_str("\r\n");
+    stream.write_all(head.as_bytes())?;
+    stream.write_all(&response.body)?;
+    stream.flush()?;
+    let _ = stream.shutdown(std::net::Shutdown::Both);
+    Ok(())
+}
+
+fn handle_request(method: &str, raw_url: &str, output: &Path, root: &Path) -> HttpResponse {
     // Split path and query string
     let (url_path, query_string) = raw_url.split_once('?').unwrap_or((raw_url, ""));
 
     // Handle POST /__dg/open?path=... — open file in editor
-    if url_path == "/__dg/open" && request.method() == &tiny_http::Method::Post {
+    if url_path == "/__dg/open" && method.eq_ignore_ascii_case("POST") {
         return handle_open_file(query_string, root);
     }
 
-    let url_path = url_path.trim_start_matches('/');
+    if !method.eq_ignore_ascii_case("GET") && !method.eq_ignore_ascii_case("HEAD") {
+        return HttpResponse::new(405, "text/plain", b"Method Not Allowed".to_vec());
+    }
+
+    // Decode %XX escapes so assets with spaces/UTF-8 names resolve on disk
+    let url_path = percent_decode_path(url_path.trim_start_matches('/'));
+
+    // Reject traversal attempts before touching the filesystem
+    if url_path.split('/').any(|seg| seg == "..") {
+        return HttpResponse::new(404, "text/plain", b"Not Found".to_vec());
+    }
+
     let file_path = if url_path.is_empty() {
         output.join("index.html")
     } else {
-        output.join(url_path)
+        output.join(&url_path)
     };
 
     if file_path.is_file() {
         let content = std::fs::read(&file_path).unwrap_or_default();
-        let mime = mime_type(&file_path);
-        let mut resp = tiny_http::Response::from_data(content).with_header(
-            tiny_http::Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap(),
-        );
         // Immutable assets (hashed filenames) get long cache; everything else no-cache
-        let cache_val: &[u8] = if url_path.contains("/_app/immutable/") {
-            b"public, max-age=31536000, immutable"
+        // (url_path has the leading slash trimmed, so match without it)
+        let cache_val = if url_path.contains("_app/immutable/") {
+            "public, max-age=31536000, immutable"
         } else {
-            b"no-cache"
+            "no-cache"
         };
-        resp = resp
-            .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], cache_val).unwrap());
-        resp
+        HttpResponse::new(200, mime_type(&file_path), content).with_cache(cache_val)
     } else if file_path.is_dir() && file_path.join("index.html").is_file() {
         let content = std::fs::read(file_path.join("index.html")).unwrap_or_default();
-        tiny_http::Response::from_data(content)
-            .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/html").unwrap())
-            .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap())
-    } else if has_file_extension(url_path) {
+        HttpResponse::new(200, "text/html; charset=utf-8", content).with_cache("no-cache")
+    } else if is_asset_request(&url_path) {
         // Try serving static assets from the project root (images, etc.)
-        let root_path = root.join(url_path);
+        let root_path = root.join(&url_path);
         if root_path.is_file() {
             let content = std::fs::read(&root_path).unwrap_or_default();
-            let mime = mime_type(&root_path);
-            tiny_http::Response::from_data(content)
-                .with_header(
-                    tiny_http::Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap(),
-                )
-                .with_header(
-                    tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap(),
-                )
+            HttpResponse::new(200, mime_type(&root_path), content).with_cache("no-cache")
         } else {
-            tiny_http::Response::from_data(b"Not Found".to_vec())
-                .with_status_code(404)
-                .with_header(
-                    tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/plain").unwrap(),
-                )
+            HttpResponse::new(404, "text/plain", b"Not Found".to_vec())
         }
     } else {
         // SPA fallback: serve index.html for non-asset routes
-        let fallback = output.join("index.html");
-        let content = std::fs::read(&fallback).unwrap_or_default();
-        tiny_http::Response::from_data(content)
-            .with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], b"text/html; charset=utf-8")
-                    .unwrap(),
-            )
-            .with_header(tiny_http::Header::from_bytes(&b"Cache-Control"[..], b"no-cache").unwrap())
+        let content = std::fs::read(output.join("index.html")).unwrap_or_default();
+        HttpResponse::new(200, "text/html; charset=utf-8", content).with_cache("no-cache")
     }
 }
 
-fn handle_open_file(
-    query_string: &str,
-    root: &Path,
-) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
+fn handle_open_file(query_string: &str, root: &Path) -> HttpResponse {
     // Parse path= from query string
     let rel_path: Option<String> = query_string.split('&').find_map(|param| {
         let (key, value) = param.split_once('=')?;
@@ -344,36 +428,34 @@ fn handle_open_file(
     });
 
     let Some(rel_path) = rel_path else {
-        return tiny_http::Response::from_data(b"{\"error\":\"missing path\"}".to_vec())
-            .with_status_code(400)
-            .with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], b"application/json").unwrap(),
-            );
+        return HttpResponse::new(
+            400,
+            "application/json",
+            b"{\"error\":\"missing path\"}".to_vec(),
+        );
     };
 
     // Prevent path traversal
     if rel_path.contains("..") {
-        return tiny_http::Response::from_data(b"{\"error\":\"invalid path\"}".to_vec())
-            .with_status_code(400)
-            .with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], b"application/json").unwrap(),
-            );
+        return HttpResponse::new(
+            400,
+            "application/json",
+            b"{\"error\":\"invalid path\"}".to_vec(),
+        );
     }
 
     let abs_path = root.join(&rel_path);
     if !abs_path.is_file() {
-        return tiny_http::Response::from_data(b"{\"error\":\"file not found\"}".to_vec())
-            .with_status_code(404)
-            .with_header(
-                tiny_http::Header::from_bytes(&b"Content-Type"[..], b"application/json").unwrap(),
-            );
+        return HttpResponse::new(
+            404,
+            "application/json",
+            b"{\"error\":\"file not found\"}".to_vec(),
+        );
     }
 
     let _ = opener::open(&abs_path);
 
-    tiny_http::Response::from_data(b"{\"ok\":true}".to_vec()).with_header(
-        tiny_http::Header::from_bytes(&b"Content-Type"[..], b"application/json").unwrap(),
-    )
+    HttpResponse::new(200, "application/json", b"{\"ok\":true}".to_vec())
 }
 
 fn mime_type(path: &Path) -> &'static str {
@@ -381,24 +463,54 @@ fn mime_type(path: &Path) -> &'static str {
         Some("html") => "text/html; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
         Some("js") => "application/javascript; charset=utf-8",
-        Some("json") => "application/json; charset=utf-8",
+        Some("json") | Some("map") => "application/json; charset=utf-8",
         Some("svg") => "image/svg+xml",
         Some("png") => "image/png",
         Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("ico") => "image/x-icon",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+        Some("ttf") => "font/ttf",
+        Some("otf") => "font/otf",
+        Some("pdf") => "application/pdf",
+        Some("webm") => "video/webm",
+        Some("mp4") => "video/mp4",
+        Some("txt") => "text/plain; charset=utf-8",
+        Some("xml") => "application/xml",
+        Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
     }
 }
 
-/// Check if a URL path looks like a file request (has an extension).
-fn has_file_extension(url_path: &str) -> bool {
+/// Known static-asset extensions. Only these get 404-on-miss; anything else
+/// falls through to the SPA (so routes with dots, e.g. /org/users/john.doe, work).
+const ASSET_EXTENSIONS: &[&str] = &[
+    "html", "css", "js", "mjs", "map", "json", "svg", "png", "jpg", "jpeg", "gif", "webp", "ico",
+    "woff", "woff2", "ttf", "otf", "pdf", "webm", "mp4", "txt", "xml", "wasm",
+];
+
+/// Check if a URL path looks like a static-asset request.
+fn is_asset_request(url_path: &str) -> bool {
     url_path
         .rsplit('/')
         .next()
-        .is_some_and(|last| last.contains('.'))
+        .and_then(|last| last.rsplit_once('.'))
+        .is_some_and(|(_, ext)| ASSET_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
 }
 
-/// Simple percent-decode for URL query values (handles %20, %2F, etc.)
+/// Simple percent-decode for URL query values (handles %20, %2F; `+` = space).
 fn percent_decode(input: &str) -> String {
+    percent_decode_impl(input, true)
+}
+
+/// Percent-decode for URL paths — `+` stays literal (only queries encode space as `+`).
+fn percent_decode_path(input: &str) -> String {
+    percent_decode_impl(input, false)
+}
+
+fn percent_decode_impl(input: &str, plus_as_space: bool) -> String {
     let mut out = Vec::with_capacity(input.len());
     let bytes = input.as_bytes();
     let mut i = 0;
@@ -411,7 +523,7 @@ fn percent_decode(input: &str) -> String {
                 i += 3;
                 continue;
             }
-        } else if bytes[i] == b'+' {
+        } else if bytes[i] == b'+' && plus_as_space {
             out.push(b' ');
             i += 1;
             continue;
@@ -422,11 +534,11 @@ fn percent_decode(input: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| input.to_string())
 }
 
-fn bind_server(host: &str, start_port: u16) -> Result<(Arc<tiny_http::Server>, u16)> {
+fn bind_server(host: &str, start_port: u16) -> Result<(TcpListener, u16)> {
     for port in start_port..start_port + 10 {
         let addr = format!("{}:{}", host, port);
-        match tiny_http::Server::http(&addr) {
-            Ok(server) => return Ok((Arc::new(server), port)),
+        match TcpListener::bind(&addr) {
+            Ok(listener) => return Ok((listener, port)),
             Err(_) => continue,
         }
     }

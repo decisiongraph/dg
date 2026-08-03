@@ -67,3 +67,6 @@ rust-disk-space.md
 .claude/settings.json
 .mcp.json
 .claude
+# Playwright
+ui/test-results/
+ui/playwright-report/

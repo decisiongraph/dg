@@ -149,8 +149,11 @@ pub fn generate_site(
     let avatar_map = if let Some(org_cfg) = org {
         #[cfg(feature = "avatars")]
         {
-            let _ = crate::avatars::sync_avatars(dir, org_cfg);
-            crate::avatars::copy_avatars_to_output(dir, output_dir, org_cfg).unwrap_or_default()
+            // Cache under .dg/cache like the other caches — not a stray
+            // `cache/` dir in the project root.
+            let _ = crate::avatars::sync_avatars(&dir.join(".dg"), org_cfg);
+            crate::avatars::copy_avatars_to_output(&dir.join(".dg"), output_dir, org_cfg)
+                .unwrap_or_default()
         }
         #[cfg(not(feature = "avatars"))]
         {
@@ -221,7 +224,7 @@ pub fn generate_site(
     let asset_count = copy_doc_assets(dir, output_dir, schema)?;
 
     // 9. Write per-route index.html for static server compatibility
-    let fallback_count = write_fallback_pages(output_dir, &by_type, org, schema)?;
+    let fallback_count = write_fallback_pages(dir, output_dir, &docs, &by_type, org, schema)?;
 
     Ok(spa_count + data_count + asset_count + fallback_count)
 }
@@ -295,7 +298,9 @@ fn copy_doc_assets(
 /// Write a copy of index.html into each SPA route directory so plain static
 /// servers (e.g. `python3 -m http.server`) can serve deep links without 404.
 fn write_fallback_pages(
+    project_dir: &Path,
     output_dir: &Path,
+    docs: &[(String, Document)],
     by_type: &BTreeMap<String, Vec<(String, &Document)>>,
     org: Option<&OrgConfig>,
     schema: &crate::schema::Schema,
@@ -341,13 +346,66 @@ fn write_fallback_pages(
         }
     }
 
+    // Service + software routes (kind slugs mirror the SPA's /software/[kind] map)
+    let mut software: Vec<(&str, Vec<PathBuf>)> = Vec::new();
+    if let Ok(svc) = crate::service::discover_service_readmes(project_dir) {
+        software.push(("services", svc));
+    }
+    if let Ok(apps) = crate::service::discover_app_readmes(project_dir) {
+        software.push(("apps", apps));
+    }
+    if let Ok(infra) = crate::service::discover_infra_readmes(project_dir) {
+        software.push(("infra", infra));
+    }
+    for (kind_slug, readmes) in &software {
+        if readmes.is_empty() {
+            continue;
+        }
+        routes.push(format!("software/{}", kind_slug));
+        for readme_path in readmes {
+            let Some(slug) = readme_path
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+            else {
+                continue;
+            };
+            routes.push(format!("services/{}", slug.to_lowercase()));
+            routes.push(format!("software/{}/{}", kind_slug, slug.to_lowercase()));
+        }
+    }
+
+    // Tag routes from doc frontmatter
+    let mut tags: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (_, doc) in docs {
+        if let Some(fm) = &doc.frontmatter {
+            if let Some(value) = fm.get("tags") {
+                for tag in data::yaml_to_string_list(value) {
+                    tags.insert(tag.to_lowercase());
+                }
+            }
+        }
+    }
+    for tag in &tags {
+        routes.push(format!("tags/{}", tag));
+    }
+
     let mut count = 0;
     for route in &routes {
         let dir = output_dir.join(route);
         std::fs::create_dir_all(&dir).map_err(|_| crate::error::Error::WriteFailed(dir.clone()))?;
-        let dest = dir.join("index.html");
-        std::fs::write(&dest, &index_html).map_err(|_| crate::error::Error::WriteFailed(dest))?;
+        write_atomic(&dir.join("index.html"), &index_html)?;
         count += 1;
     }
     Ok(count)
+}
+
+/// Write a file via temp-file + rename so `dg serve` never serves a
+/// half-written file during a live rebuild.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> crate::error::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp-write");
+    let tmp = PathBuf::from(tmp);
+    std::fs::write(&tmp, bytes).map_err(|_| crate::error::Error::WriteFailed(tmp.clone()))?;
+    std::fs::rename(&tmp, path).map_err(|_| crate::error::Error::WriteFailed(path.to_path_buf()))
 }

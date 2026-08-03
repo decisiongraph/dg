@@ -1998,11 +1998,11 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
 
 fn write_json<T: Serialize>(path: &Path, data: &T) -> crate::error::Result<()> {
     let json = serde_json::to_string(data)?;
-    std::fs::write(path, json).map_err(|_| crate::error::Error::WriteFailed(path.to_path_buf()))
+    crate::site::write_atomic(path, json.as_bytes())
 }
 
 /// Extract string list from a YAML value (scalar → 1-item list, sequence → list).
-fn yaml_to_string_list(val: &serde_yaml::Value) -> Vec<String> {
+pub(crate) fn yaml_to_string_list(val: &serde_yaml::Value) -> Vec<String> {
     match val {
         serde_yaml::Value::String(s) => {
             if s.is_empty() {
