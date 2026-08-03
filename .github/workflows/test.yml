@@ -1,0 +1,50 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Rust + e2e tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build UI
+        working-directory: ui
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Build dg binary (embeds fresh UI)
+        run: DG_SKIP_UI_BUILD=1 cargo build -p dg-cli
+
+      - name: Rust tests
+        run: DG_SKIP_UI_BUILD=1 cargo test --workspace
+
+      - name: Install Playwright browsers
+        working-directory: ui
+        run: bunx playwright install --with-deps chromium
+
+      - name: e2e tests
+        working-directory: ui
+        run: bun run test:e2e
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: ui/test-results/
+          retention-days: 7
