@@ -11,7 +11,9 @@
 
   outputs = { self, nixpkgs, bun2nix }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      # x86_64-darwin dropped: nixpkgs unstable (26.11) no longer supports it.
+      # Intel mac users: use Homebrew tap or GitHub release binaries.
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system:
         f (import nixpkgs {
