@@ -60,6 +60,9 @@ pub struct DocJson {
     /// Relative path to source markdown file (e.g. "docs/architecture/adr-001.md")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
+    /// Mermaid diagram generated from the doc's Gherkin scenarios (specs).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scenario_diagram: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -562,6 +565,8 @@ pub fn build_docs_json(
                 .and_then(|p| p.to_str())
                 .map(|s| s.to_string());
 
+            let scenario_diagram = scenario_diagram_for(&doc.body, id);
+
             DocJson {
                 id: id.clone(),
                 doc_type,
@@ -580,6 +585,7 @@ pub fn build_docs_json(
                 backlinks,
                 open_questions,
                 source_path,
+                scenario_diagram,
             }
         })
         .collect();
@@ -1994,6 +2000,57 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
         commit_url_prefix,
         file_url_prefix,
     }
+}
+
+/// Generate a mermaid diagram from a doc body's ```gherkin fences, if any.
+#[cfg(feature = "gherkin")]
+fn scenario_diagram_for(body: &str, doc_id: &str) -> Option<String> {
+    let blocks = extract_gherkin_fences(body);
+    if blocks.is_empty() {
+        return None;
+    }
+    let result = dg_gherkin::process_blocks(&blocks, doc_id).ok()?;
+    if result.features.is_empty() {
+        return None;
+    }
+    let diagram = dg_gherkin::generate_diagram(
+        &result.features,
+        dg_gherkin::DiagramFormat::Mermaid,
+        dg_gherkin::DiagramStyle::Auto,
+    );
+    (!diagram.trim().is_empty()).then_some(diagram)
+}
+
+#[cfg(not(feature = "gherkin"))]
+fn scenario_diagram_for(_body: &str, _doc_id: &str) -> Option<String> {
+    None
+}
+
+/// Extract the contents of ```gherkin fenced code blocks from markdown.
+#[cfg(feature = "gherkin")]
+fn extract_gherkin_fences(body: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut current: Option<Vec<&str>> = None;
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        match &mut current {
+            Some(lines) => {
+                if trimmed.starts_with("```") {
+                    blocks.push(lines.join("\n"));
+                    current = None;
+                } else {
+                    lines.push(line);
+                }
+            }
+            None => {
+                let fence = trimmed.trim_start_matches('`');
+                if trimmed.starts_with("```") && fence.trim() == "gherkin" {
+                    current = Some(Vec::new());
+                }
+            }
+        }
+    }
+    blocks
 }
 
 fn write_json<T: Serialize>(path: &Path, data: &T) -> crate::error::Result<()> {

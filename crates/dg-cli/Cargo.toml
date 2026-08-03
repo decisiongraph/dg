@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 dg-schemas = { path = "../dg-schemas" }
-md-db = { workspace = true, features = ["git", "avatars"] }
+md-db = { workspace = true, features = ["git", "avatars", "gherkin"] }
 dg-gherkin = { workspace = true }
 markdown-tui = { workspace = true }
 clap = { workspace = true }

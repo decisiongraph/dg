@@ -254,6 +254,7 @@ type "spec" description="Behavioral Specification / User Story" folder="docs/spe
     field "author" type="user" required=#true description="Spec author"
     field "date" type="string" required=#true pattern="^\\d{4}-\\d{2}-\\d{2}$" default="$TODAY"
     field "tags" type="string[]"
+    field "code_paths" type="string[]" description="Glob patterns of source code paths implementing this spec"
 
     section "Story" required=#true description="User story (As a / I want / So that)" {
         content min-paragraphs=1

@@ -11,6 +11,7 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { graphNodes, graphEdges, graphLoading } from '$lib/stores/graph';
 	import { docTypes } from '$lib/stores/docs';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -44,6 +45,9 @@
 
 	let hiddenStatuses = new SvelteSet(HIDDEN_BY_DEFAULT);
 	let hiddenTypes = new SvelteSet<string>();
+
+	// ?focus=<id> — restrict the graph to that doc's depth-2 neighborhood
+	let focusId = $state(page.url.searchParams.get('focus')?.toUpperCase() ?? null);
 
 	const typeGroupColors: Record<string, { fill: string; border: string }> = {
 		adr: { fill: 'rgba(59,130,246,0.06)', border: 'rgba(59,130,246,0.15)' },
@@ -124,9 +128,35 @@
 		}
 
 		// Sort by ID number so oldest appear first (dagre respects input order for ranking)
-		const connectedNodes = rawNodes
+		let connectedNodes = rawNodes
 			.filter((n) => connectedIds.has(n.id))
 			.sort((a, b) => idNum(a.id) - idNum(b.id));
+
+		// ?focus= restricts to the depth-2 neighborhood of one doc
+		if (focusId) {
+			const adjacency = new Map<string, Set<string>>();
+			for (const e of filteredEdges) {
+				if (!adjacency.has(e.source)) adjacency.set(e.source, new Set());
+				if (!adjacency.has(e.target)) adjacency.set(e.target, new Set());
+				adjacency.get(e.source)!.add(e.target);
+				adjacency.get(e.target)!.add(e.source);
+			}
+			const included = new Set<string>([focusId]);
+			let frontier = [focusId];
+			for (let d = 0; d < 2; d++) {
+				const next: string[] = [];
+				for (const id of frontier) {
+					for (const neighbor of adjacency.get(id) ?? []) {
+						if (!included.has(neighbor)) {
+							included.add(neighbor);
+							next.push(neighbor);
+						}
+					}
+				}
+				frontier = next;
+			}
+			connectedNodes = connectedNodes.filter((n) => included.has(n.id));
+		}
 
 		// Apply status + type filters — only layout visible nodes
 		const visibleNodes = connectedNodes.filter(
@@ -307,7 +337,22 @@
 </svelte:head>
 
 <div class="mx-auto max-w-7xl">
-	<h1 class="text-2xl font-bold text-foreground mb-4">Dependency Graph</h1>
+	<div class="mb-4 flex items-center gap-3">
+		<h1 class="text-2xl font-bold text-foreground">Dependency Graph</h1>
+		{#if focusId}
+			<Button
+				variant="secondary"
+				size="sm"
+				class="h-7 rounded-full px-2.5 text-[11px]"
+				onclick={() => {
+					focusId = null;
+					goto('/graph', { replaceState: true });
+				}}
+			>
+				Focused on {focusId} ✕
+			</Button>
+		{/if}
+	</div>
 
 	<div class="relative rounded-xl border bg-card shadow-sm" style="height: calc(100vh - 10rem);">
 		<!-- Control bar -->

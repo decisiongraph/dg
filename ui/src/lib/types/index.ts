@@ -28,6 +28,8 @@ export interface DocEntry {
 	links: Record<string, string[] | null>;
 	backlinks: Backlink[];
 	source_path?: string;
+	/** Mermaid diagram generated from the doc's Gherkin scenarios */
+	scenario_diagram?: string;
 }
 
 export interface DocsData {

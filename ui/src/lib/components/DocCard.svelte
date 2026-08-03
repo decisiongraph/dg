@@ -2,9 +2,9 @@
 	import StatusBadge from './StatusBadge.svelte';
 	import UserAvatar from './UserAvatar.svelte';
 	import type { DocEntry } from '$lib/types';
-	import { docTypes } from '$lib/stores/docs';
+	import { allDocs, docTypes } from '$lib/stores/docs';
 	import { orgData } from '$lib/stores/org';
-	import { isInactive } from '$lib/utils';
+	import { isDone, isInactive } from '$lib/utils';
 
 	interface Props {
 		doc: DocEntry;
@@ -33,6 +33,18 @@
 	const folder = $derived($docTypes[doc.type]?.folder ?? doc.type);
 	const href = $derived(`/${folder}/${doc.id.toLowerCase()}`);
 	const user = $derived(doc.author ? $orgData?.users[doc.author] : undefined);
+
+	// Rollup over docs that implement / depend on this one
+	const rollup = $derived.by(() => {
+		const children = doc.backlinks.filter(
+			(bl) => bl.relation === 'implements' || bl.relation === 'depends_on'
+		);
+		if (children.length < 2) return undefined;
+		const done = children.filter((bl) =>
+			isDone($allDocs.find((d) => d.id.toLowerCase() === bl.id.toLowerCase())?.status)
+		).length;
+		return { done, total: children.length };
+	});
 </script>
 
 <a
@@ -49,12 +61,20 @@
 			<StatusBadge status={doc.status} docType={doc.type} />
 		{/if}
 	</div>
-	{#if doc.author || doc.date}
+	{#if doc.author || doc.date || rollup}
 		<div class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
 			{#if doc.author}
 				<UserAvatar handle={doc.author} name={user?.name ?? doc.author} avatarUrl={user?.avatar_url} size="sm" />
 			{/if}
 			{#if doc.date}<span>{doc.date}</span>{/if}
+			{#if rollup}
+				<span
+					class="ml-auto rounded-full border px-2 py-0.5 text-[10px] font-medium {rollup.done === rollup.total ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400'}"
+					title="{rollup.done} of {rollup.total} implementing/dependent docs done"
+				>
+					{rollup.done}/{rollup.total} done
+				</span>
+			{/if}
 		</div>
 	{/if}
 </a>

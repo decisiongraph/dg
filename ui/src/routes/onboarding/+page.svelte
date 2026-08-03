@@ -18,6 +18,7 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import DocNode from '$lib/components/graph/DocNode.svelte';
+	import DocCard from '$lib/components/DocCard.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { enrichContentRefs } from '$lib/actions/content-refs';
 	import { goto } from '$app/navigation';
@@ -583,6 +584,25 @@
 	{#if $docsLoading}
 		<div class="text-muted-foreground">Loading...</div>
 	{:else}
+		<!-- Project-specific reading path: what this org is pursuing right now -->
+		{@const activeOpps = $allDocs.filter(
+			(d) => d.type === 'opp' && ['identified', 'validating', 'pursuing'].includes(d.status?.toLowerCase())
+		)}
+		{#if activeOpps.length > 0}
+			<section class="mb-10" data-testid="start-here">
+				<h2 class="text-lg font-semibold text-foreground mb-2">Start here</h2>
+				<p class="text-sm text-muted-foreground mb-4">
+					These are the opportunities this project is actively pursuing — each links to the
+					decisions, specs, and policies that implement it. Read them first.
+				</p>
+				<div class="grid gap-3 sm:grid-cols-2">
+					{#each activeOpps as opp (opp.id)}
+						<DocCard doc={opp} />
+					{/each}
+				</div>
+			</section>
+		{/if}
+
 		<!-- Quick start tutorial (collapsible) -->
 		<details class="dev-section-collapsible mb-8">
 			<summary>
