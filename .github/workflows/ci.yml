@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Cargo tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Assert Cargo.lock is in sync with Cargo.toml
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+      # Prebuild the SPA once; DG_SKIP_UI_BUILD stops build.rs from
+      # rebuilding it for every profile (same trick as release.yml).
+      - name: Build SPA
+        run: cd ui && bun install --frozen-lockfile && bun run build
+
+      - name: Run tests
+        env:
+          DG_SKIP_UI_BUILD: "1"
+        run: cargo test --locked --workspace
+
+  nix:
+    name: Nix flake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@v16
+
+      - name: Flake check (evaluates all systems)
+        run: nix flake check --all-systems
+
+      - name: Assert ui/bun.nix is in sync with ui/bun.lock
+        run: |
+          nix run .#bun2nix -- -l ui/bun.lock -o /tmp/bun.nix
+          diff -u ui/bun.nix /tmp/bun.nix
+
+      - name: Build package
+        run: nix build .#dg --print-build-logs
+
+      - name: Smoke test binaries
+        run: |
+          ./result/bin/dg --version
+          test -x ./result/bin/dg-mcp
