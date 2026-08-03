@@ -54,6 +54,9 @@ pub enum Command {
     /// Show references from/to a document
     Refs(refs::RefsArgs),
     /// Validate documents against schema
+    ///
+    /// A full scan skips paths listed in .dgignore
+    /// (.gitignore syntax, read hierarchically; takes precedence over .gitignore).
     Validate(validate::ValidateArgs),
     /// Suggest improvements for documents
     Suggest(suggest::SuggestArgs),

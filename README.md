@@ -265,6 +265,33 @@ responders:
 
 `dg validate` checks that all user references resolve against `org.kdl`.
 
+### `.dgignore` — Excluding paths from the scan
+
+An optional `.dgignore` file, usually at the project root, excludes paths from document discovery, so prose markdown that is not a decision document (mdbook pages, vendored docs, generated output) is never validated. It uses `.gitignore` syntax and applies to commands that scan for documents, including `dg validate`, `dg lint`, `dg list`, and `dg site`.
+
+Like `.gitignore`, it is read hierarchically: a `.dgignore` in a subdirectory applies to that subtree with its patterns relative to its own directory, and files in parent directories apply too.
+
+```
+# Generated book output
+book/
+
+# Build artifacts
+target/
+```
+
+Anchoring follows `.gitignore` rules: `book/` matches a `book` directory at any depth, while a leading slash (`/book/`) matches only at the project root.
+
+`.dgignore` takes precedence over `.gitignore`, so a negated pattern re-includes documents that git ignores — useful when docs live outside version control:
+
+```
+# .gitignore has docs/, but dg should still validate it
+!docs/
+```
+
+Re-inclusion must name the directory (`!docs/`). As in git, a pattern like `!docs/adr-001.md` cannot resurface a single file whose parent directory is excluded.
+
+List only paths that hold no decision documents. Commands that derive state from the visible set — `dg new` allocating the next ID, `dg renumber` rewriting references — cannot see an ignored document, so ignoring a folder of real decisions leads to duplicate IDs. The same caveat already applies to paths excluded by `.gitignore`; use a `!` pattern to bring such documents back into view.
+
 ## Gherkin support
 
 SPEC documents contain Gherkin scenarios in fenced code blocks:
