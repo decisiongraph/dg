@@ -36,7 +36,7 @@ pub struct CacheEntry {
 }
 
 /// In-memory document cache with file-based JSON persistence.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DocCache {
     entries: HashMap<PathBuf, CacheEntry>,
     dirty: bool,

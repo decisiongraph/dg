@@ -369,7 +369,18 @@ pub fn extract_service_metadata(path: &Path, root: &Path) -> Result<ServiceMetad
 
     // Infer tech stack from service directory
     let service_dir = path.parent().unwrap_or(path);
-    let tech_stack = extract_tech_stack(service_dir);
+    let mut tech_stack = extract_tech_stack(service_dir);
+
+    // Frontmatter `language` overrides detection (e.g. OpenTofu vs Terraform,
+    // or a README-only service dir whose code lives elsewhere).
+    if let Some(lang) = fm.and_then(|f| f.get_display("language")) {
+        tech_stack.languages = vec![LanguageInfo {
+            name: lang.clone(),
+            percentage: 100.0,
+            lines: None,
+        }];
+        tech_stack.primary_language = lang;
+    }
 
     // Detect engineering practices
     let practices = detect_engineering_practices(service_dir, &tech_stack.primary_language, fm);
@@ -844,6 +855,19 @@ fn detect_frameworks(service_dir: &Path, primary_lang: &str) -> Vec<String> {
                 }
             }
         }
+        "Elixir" => {
+            if let Ok(content) = std::fs::read_to_string(service_dir.join("mix.exs")) {
+                if content.contains("{:phoenix,") {
+                    frameworks.push("Phoenix".to_string());
+                }
+                if content.contains("{:ash,") {
+                    frameworks.push("Ash".to_string());
+                }
+            }
+        }
+        "Terraform" | "OpenTofu" | "HCL" => {
+            frameworks.extend(detect_terraform_providers(service_dir));
+        }
         _ => {}
     }
 
@@ -893,6 +917,22 @@ fn detect_deployment_platform(service_dir: &Path) -> Option<DeploymentInfo> {
             platform: "Netlify".to_string(),
             detected_from: "netlify.toml".to_string(),
         });
+    }
+
+    // Wrangler config: Pages projects declare pages_build_output_dir,
+    // everything else is a Worker.
+    for wrangler in &["wrangler.toml", "wrangler.jsonc", "wrangler.json"] {
+        let path = service_dir.join(wrangler);
+        if path.exists() {
+            let platform = match std::fs::read_to_string(&path) {
+                Ok(content) if content.contains("pages_build_output_dir") => "Cloudflare Pages",
+                _ => "Cloudflare Workers",
+            };
+            return Some(DeploymentInfo {
+                platform: platform.to_string(),
+                detected_from: wrangler.to_string(),
+            });
+        }
     }
 
     if service_dir.join("Dockerfile").exists() {
@@ -970,6 +1010,21 @@ fn detect_database(service_dir: &Path, primary_lang: &str) -> Option<String> {
         }
         if content.contains("pymongo") {
             return Some("MongoDB".to_string());
+        }
+    }
+
+    // Check mix.exs for Elixir database drivers
+    if primary_lang == "Elixir" {
+        if let Ok(content) = std::fs::read_to_string(service_dir.join("mix.exs")) {
+            if content.contains(":postgrex") {
+                return Some("PostgreSQL".to_string());
+            }
+            if content.contains(":myxql") {
+                return Some("MySQL".to_string());
+            }
+            if content.contains(":ecto_sqlite3") || content.contains(":exqlite") {
+                return Some("SQLite".to_string());
+            }
         }
     }
 
@@ -1055,6 +1110,33 @@ fn detect_versions(
                 }
             }
         }
+        "Elixir" => {
+            // Check .tool-versions: "elixir 1.20.0-otp-28"
+            if let Ok(content) = std::fs::read_to_string(service_dir.join(".tool-versions")) {
+                if let Some(line) = content
+                    .lines()
+                    .find(|l| l.trim_start().starts_with("elixir "))
+                {
+                    if let Some(version) = line.split_whitespace().nth(1) {
+                        language_version = Some(version.to_string());
+                    }
+                }
+            }
+
+            // Check mix.lock for Phoenix version: "phoenix": {:hex, :phoenix, "1.8.7", ...
+            if frameworks.contains(&"Phoenix".to_string()) {
+                if let Ok(content) = std::fs::read_to_string(service_dir.join("mix.lock")) {
+                    if let Some(line) = content
+                        .lines()
+                        .find(|l| l.trim_start().starts_with("\"phoenix\":"))
+                    {
+                        if let Some(version) = line.split('"').nth(3) {
+                            framework_versions.push(("Phoenix".to_string(), version.to_string()));
+                        }
+                    }
+                }
+            }
+        }
         _ => {}
     }
 
@@ -1084,6 +1166,7 @@ fn fallback_tech_stack_detection(service_dir: &Path) -> TechStack {
             // Skip Gemfile, prioritise package.json
             vec![
                 ("package.json", "JavaScript"),
+                ("mix.exs", "Elixir"),
                 ("requirements.txt", "Python"),
                 ("Cargo.toml", "Rust"),
                 ("go.mod", "Go"),
@@ -1096,6 +1179,7 @@ fn fallback_tech_stack_detection(service_dir: &Path) -> TechStack {
             vec![
                 ("Gemfile", "Ruby"),
                 ("package.json", "JavaScript"),
+                ("mix.exs", "Elixir"),
                 ("requirements.txt", "Python"),
                 ("Cargo.toml", "Rust"),
                 ("go.mod", "Go"),
@@ -1142,12 +1226,100 @@ fn fallback_tech_stack_detection(service_dir: &Path) -> TechStack {
         }
     }
 
+    // Terraform/OpenTofu roots usually hold only env/module subdirs,
+    // so look for .tf files a few levels deep.
+    if let Some(lang) = detect_terraform_language(service_dir) {
+        let mut stack = TechStack::from_simple_string(&lang);
+        stack.frameworks = detect_frameworks(service_dir, &lang);
+        stack.deployment = detect_deployment_platform(service_dir);
+        return stack;
+    }
+
     let deployment = detect_deployment_platform(service_dir);
     let database = detect_database(service_dir, "Unknown");
     let mut stack = TechStack::from_simple_string("Unknown");
     stack.deployment = deployment;
     stack.database = database;
     stack
+}
+
+/// Cloud platforms referenced by Terraform/OpenTofu provider sources.
+/// `hashicorp/google` also matches `hashicorp/google-beta`.
+const TF_PROVIDER_PLATFORMS: &[(&str, &str)] = &[
+    ("hashicorp/aws", "AWS"),
+    ("hashicorp/google", "Google Cloud"),
+    ("hashicorp/azurerm", "Azure"),
+    ("hashicorp/azuread", "Azure"),
+    ("hashicorp/kubernetes", "Kubernetes"),
+    ("cloudflare/cloudflare", "Cloudflare"),
+    ("digitalocean/digitalocean", "DigitalOcean"),
+];
+
+/// Collect cloud platforms from provider sources in .tf/.tofu files.
+fn detect_terraform_providers(service_dir: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    scan_tf_providers(service_dir, 4, &mut found);
+    found
+}
+
+fn scan_tf_providers(dir: &Path, depth: usize, found: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let path = entry.path();
+        if path.is_dir() {
+            if depth > 0 && !name.starts_with('.') && name != "node_modules" {
+                scan_tf_providers(&path, depth - 1, found);
+            }
+        } else if name.ends_with(".tf") || name.ends_with(".tofu") {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                for (source, platform) in TF_PROVIDER_PLATFORMS {
+                    if content.contains(source) && !found.iter().any(|p| p == platform) {
+                        found.push(platform.to_string());
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Detect Terraform/OpenTofu infra directories by scanning for .tf files.
+/// Reports OpenTofu when tofu-specific markers exist, Terraform otherwise.
+fn detect_terraform_language(service_dir: &Path) -> Option<String> {
+    if !find_file_by_suffix(service_dir, &[".tf", ".tofu"], 4) {
+        return None;
+    }
+    let is_tofu = service_dir.join(".opentofu-version").exists()
+        || find_file_by_suffix(service_dir, &[".tofu"], 4);
+    Some(if is_tofu { "OpenTofu" } else { "Terraform" }.to_string())
+}
+
+/// Bounded recursive search for any file whose name ends with one of `suffixes`.
+/// Skips hidden dirs (including .terraform) and node_modules.
+fn find_file_by_suffix(dir: &Path, suffixes: &[&str], depth: usize) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let path = entry.path();
+        if path.is_dir() {
+            if depth > 0
+                && !name.starts_with('.')
+                && name != "node_modules"
+                && find_file_by_suffix(&path, suffixes, depth - 1)
+            {
+                return true;
+            }
+        } else if suffixes.iter().any(|s| name.ends_with(s)) {
+            return true;
+        }
+    }
+    false
 }
 
 // ─── Completion check functions ─────────────────────────────────────────────
@@ -1298,6 +1470,7 @@ pub fn has_code(service_dir: &Path) -> bool {
         "composer.json",
         "mix.exs",
         "wrangler.toml",
+        "wrangler.jsonc",
     ];
 
     for indicator in source_indicators {
@@ -1353,6 +1526,7 @@ pub fn detect_linter(service_dir: &Path, primary_lang: &str) -> (bool, Option<St
             "golangci-lint",
         )],
         "Elixir" => &[(&[".credo.exs"] as &[&str], "Credo")],
+        "Terraform" | "OpenTofu" => &[(&[".tflint.hcl"] as &[&str], "TFLint")],
         _ => return (false, None),
     };
 
@@ -1465,6 +1639,17 @@ pub fn detect_tests(service_dir: &Path, primary_lang: &str) -> (bool, Option<Str
         "Elixir" => {
             if service_dir.join("test").is_dir() {
                 return (true, Some("ExUnit".to_string()));
+            }
+            (false, None)
+        }
+        "Terraform" | "OpenTofu" => {
+            if find_file_by_suffix(service_dir, &[".tftest.hcl"], 4) {
+                let framework = if primary_lang == "OpenTofu" {
+                    "tofu test"
+                } else {
+                    "terraform test"
+                };
+                return (true, Some(framework.to_string()));
             }
             (false, None)
         }
@@ -1601,6 +1786,7 @@ pub fn resolve_lint_command(linter_tool: &str) -> Option<LintCommand> {
         "Ruff" => ("ruff", vec!["check", "."], vec!["--output-format", "json"]),
         "golangci-lint" => ("golangci-lint", vec!["run"], vec!["--out-format", "json"]),
         "Credo" => ("mix", vec!["credo"], vec!["--format", "json"]),
+        "TFLint" => ("tflint", vec!["--recursive"], vec!["--format", "json"]),
         "Flake8" => ("flake8", vec!["."], vec!["--format", "json"]),
         _ => return None,
     };
@@ -2206,6 +2392,140 @@ mod tests {
 
         let stack = extract_tech_stack(&tmp);
         assert_eq!(stack.primary_language, "Unknown");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_extract_tech_stack_elixir_phoenix() {
+        let tmp = std::env::temp_dir().join("dg_service_elixir");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        std::fs::write(
+            tmp.join("mix.exs"),
+            r#"defp deps do
+    [
+      {:phoenix, "~> 1.8.7"},
+      {:postgrex, ">= 0.0.0"},
+      {:ash, "~> 3.0"}
+    ]
+  end"#,
+        )
+        .unwrap();
+        std::fs::write(tmp.join(".tool-versions"), "erlang 28.0\nelixir 1.20.0\n").unwrap();
+        std::fs::write(
+            tmp.join("mix.lock"),
+            r#"%{
+  "phoenix": {:hex, :phoenix, "1.8.7", "d8d755", [:mix], [], "hexpm", "4735"},
+}"#,
+        )
+        .unwrap();
+
+        let stack = extract_tech_stack(&tmp);
+        assert_eq!(stack.primary_language, "Elixir");
+        assert!(
+            stack.frameworks.contains(&"Phoenix".to_string()),
+            "Expected Phoenix in {:?}",
+            stack.frameworks
+        );
+        assert!(stack.frameworks.contains(&"Ash".to_string()));
+        assert_eq!(stack.database.as_deref(), Some("PostgreSQL"));
+        assert_eq!(stack.language_version.as_deref(), Some("1.20.0"));
+        assert!(stack
+            .framework_versions
+            .contains(&("Phoenix".to_string(), "1.8.7".to_string())));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_detect_cloudflare_pages_from_wrangler() {
+        let tmp = std::env::temp_dir().join("dg_service_cf_pages");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // Pages project: wrangler.jsonc with pages_build_output_dir
+        std::fs::write(
+            tmp.join("wrangler.jsonc"),
+            r#"{ "name": "site", "pages_build_output_dir": "./public" }"#,
+        )
+        .unwrap();
+        let deployment = detect_deployment_platform(&tmp).unwrap();
+        assert_eq!(deployment.platform, "Cloudflare Pages");
+        assert_eq!(deployment.detected_from, "wrangler.jsonc");
+
+        // Worker project: wrangler.toml without pages_build_output_dir
+        std::fs::remove_file(tmp.join("wrangler.jsonc")).unwrap();
+        std::fs::write(tmp.join("wrangler.toml"), "name = \"worker\"\n").unwrap();
+        let deployment = detect_deployment_platform(&tmp).unwrap();
+        assert_eq!(deployment.platform, "Cloudflare Workers");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_extract_tech_stack_terraform_nested() {
+        let tmp = std::env::temp_dir().join("dg_service_terraform");
+        let _ = std::fs::remove_dir_all(&tmp);
+        // .tf files only in nested env dirs, like real infra repos
+        std::fs::create_dir_all(tmp.join("envs/prod/tests")).unwrap();
+        std::fs::write(
+            tmp.join("envs/prod/versions.tf"),
+            r#"terraform {
+  required_providers {
+    google = { source = "hashicorp/google" }
+    aws    = { source = "hashicorp/aws" }
+    cloudflare = { source = "cloudflare/cloudflare" }
+  }
+}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.join("envs/prod/tests/naming.tftest.hcl"),
+            "run \"x\" {}\n",
+        )
+        .unwrap();
+
+        let stack = extract_tech_stack(&tmp);
+        assert_eq!(stack.primary_language, "Terraform");
+        assert_eq!(
+            stack.frameworks,
+            vec!["AWS", "Google Cloud", "Cloudflare"],
+            "provider platforms should surface as framework pills"
+        );
+
+        let (has_tests, framework) = detect_tests(&tmp, "Terraform");
+        assert!(has_tests);
+        assert_eq!(framework.as_deref(), Some("terraform test"));
+        let (_, tofu_framework) = detect_tests(&tmp, "OpenTofu");
+        assert_eq!(tofu_framework.as_deref(), Some("tofu test"));
+
+        // TFLint config at root
+        std::fs::write(tmp.join(".tflint.hcl"), "plugin \"terraform\" {}\n").unwrap();
+        let (has_linter, tool) = detect_linter(&tmp, "OpenTofu");
+        assert!(has_linter);
+        assert_eq!(tool.as_deref(), Some("TFLint"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_frontmatter_language_override() {
+        let tmp = std::env::temp_dir().join("dg_service_fm_lang");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("infra/opentofu")).unwrap();
+        std::fs::write(tmp.join("infra/opentofu/main.tf"), "# tf\n").unwrap();
+        std::fs::write(
+            tmp.join("infra/opentofu/README.md"),
+            "---\nlanguage: OpenTofu\n---\n\n# Tofu Infra\n\nInfra managed with OpenTofu.\n",
+        )
+        .unwrap();
+
+        let metadata =
+            extract_service_metadata(&tmp.join("infra/opentofu/README.md"), &tmp).unwrap();
+        assert_eq!(metadata.tech_stack.primary_language, "OpenTofu");
+        assert_eq!(metadata.tech_stack.languages[0].name, "OpenTofu");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

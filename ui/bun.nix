@@ -213,6 +213,10 @@
     url = "https://registry.npmjs.org/@napi-rs/wasm-runtime/-/wasm-runtime-1.1.6.tgz";
     hash = "sha512-ZLv/JdUfkvOy9eCnnBaGfiO+XimbjebAeO+MRQqD/B+FR1tnRN0tpKSJHRbE8sFfS6aqsXZ67TQjfwfsxULVbg==";
   };
+  "@playwright/test@1.62.1" = fetchurl {
+    url = "https://registry.npmjs.org/@playwright/test/-/test-1.62.1.tgz";
+    hash = "sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==";
+  };
   "@polka/url@1.0.0-next.29" = fetchurl {
     url = "https://registry.npmjs.org/@polka/url/-/url-1.0.0-next.29.tgz";
     hash = "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==";
@@ -897,6 +901,10 @@
     url = "https://registry.npmjs.org/fdir/-/fdir-6.5.0.tgz";
     hash = "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==";
   };
+  "fsevents@2.3.2" = fetchurl {
+    url = "https://registry.npmjs.org/fsevents/-/fsevents-2.3.2.tgz";
+    hash = "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==";
+  };
   "fsevents@2.3.3" = fetchurl {
     url = "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz";
     hash = "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==";
@@ -1188,6 +1196,14 @@
   "pkg-types@1.3.1" = fetchurl {
     url = "https://registry.npmjs.org/pkg-types/-/pkg-types-1.3.1.tgz";
     hash = "sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==";
+  };
+  "playwright-core@1.62.1" = fetchurl {
+    url = "https://registry.npmjs.org/playwright-core/-/playwright-core-1.62.1.tgz";
+    hash = "sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==";
+  };
+  "playwright@1.62.1" = fetchurl {
+    url = "https://registry.npmjs.org/playwright/-/playwright-1.62.1.tgz";
+    hash = "sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==";
   };
   "points-on-curve@0.2.0" = fetchurl {
     url = "https://registry.npmjs.org/points-on-curve/-/points-on-curve-0.2.0.tgz";

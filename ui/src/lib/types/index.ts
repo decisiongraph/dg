@@ -28,6 +28,8 @@ export interface DocEntry {
 	links: Record<string, string[] | null>;
 	backlinks: Backlink[];
 	source_path?: string;
+	/** Mermaid diagram generated from the doc's Gherkin scenarios */
+	scenario_diagram?: string;
 }
 
 export interface DocsData {
@@ -157,6 +159,7 @@ export interface ServiceEntry {
 	owner: string;
 	owner_team?: string;
 	description: string;
+	description_html?: string;
 	readme_path: string;
 	source_url?: string;
 	body_html: string;

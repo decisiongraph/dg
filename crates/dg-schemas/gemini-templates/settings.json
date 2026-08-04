@@ -10,10 +10,6 @@
           {
             "type": "command",
             "command": ".gemini/hooks/check-fixme.sh"
-          },
-          {
-            "type": "command",
-            "command": ".gemini/hooks/check-code.sh"
           }
         ]
       }

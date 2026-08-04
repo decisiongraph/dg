@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 dg-schemas = { path = "../dg-schemas" }
-md-db = { workspace = true, features = ["git", "avatars"] }
+md-db = { workspace = true, features = ["git", "avatars", "gherkin"] }
 dg-gherkin = { workspace = true }
 markdown-tui = { workspace = true }
 clap = { workspace = true }
@@ -21,7 +21,6 @@ comrak = { version = "0.53", default-features = false }
 crossterm = "0.29"
 git2 = { version = "0.21", features = ["vendored-libgit2", "vendored-openssl"] }
 regex = "1"
-tiny_http = "0.12"
 notify = "8"
 opener = "0.8"
 

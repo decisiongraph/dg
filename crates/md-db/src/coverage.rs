@@ -17,8 +17,6 @@ pub struct CoverageReport {
     pub linkage_pct: f64,
     /// Freshness: number of stale docs (proposed >30 days, expired review_date)
     pub stale_count: usize,
-    /// code_paths coverage: % of ADR/POL docs with non-empty code_paths
-    pub code_paths_pct: f64,
     /// Per-file details
     pub files: Vec<FileCoverage>,
 }
@@ -47,8 +45,6 @@ pub struct FileCoverage {
     pub section_completeness: f64,
     /// Has at least one cross-reference
     pub has_refs: bool,
-    /// Has code_paths set
-    pub has_code_paths: bool,
     /// Is stale (proposed >30 days or expired review_date)
     pub is_stale: bool,
 }
@@ -65,8 +61,6 @@ pub fn coverage_report(
 
     let mut file_coverages = Vec::new();
     let mut type_map: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    let mut code_paths_eligible = 0usize;
-    let mut code_paths_present = 0usize;
 
     for path in &files {
         let doc = match Document::from_file(path) {
@@ -116,21 +110,6 @@ pub fn coverage_report(
         let incoming = graph.refs_to(&doc_id);
         let has_refs = !outgoing.is_empty() || !incoming.is_empty();
 
-        // code_paths
-        let has_code_paths = fm.get("code_paths").is_some_and(|v| match v {
-            serde_yaml::Value::Sequence(seq) => !seq.is_empty(),
-            serde_yaml::Value::String(s) => !s.is_empty(),
-            _ => false,
-        });
-
-        // Track code_paths for ADR/POL
-        if matches!(doc_type.as_deref(), Some("adr") | Some("pol")) {
-            code_paths_eligible += 1;
-            if has_code_paths {
-                code_paths_present += 1;
-            }
-        }
-
         // Staleness
         let is_stale = check_staleness(fm, doc_type.as_deref(), today);
 
@@ -143,7 +122,6 @@ pub fn coverage_report(
             field_completeness,
             section_completeness,
             has_refs,
-            has_code_paths,
             is_stale,
         });
     }
@@ -169,12 +147,6 @@ pub fn coverage_report(
 
     let stale_count = file_coverages.iter().filter(|f| f.is_stale).count();
 
-    let code_paths_pct = if code_paths_eligible > 0 {
-        (code_paths_present as f64 / code_paths_eligible as f64) * 100.0
-    } else {
-        100.0
-    };
-
     let type_counts: Vec<TypeCount> = type_map
         .into_iter()
         .map(|(doc_type, count)| TypeCount { doc_type, count })
@@ -186,7 +158,6 @@ pub fn coverage_report(
         completeness_pct,
         linkage_pct,
         stale_count,
-        code_paths_pct,
         files: file_coverages,
     })
 }

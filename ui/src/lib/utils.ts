@@ -19,3 +19,10 @@ const INACTIVE_STATUSES = new Set([
 export function isInactive(status: string | undefined): boolean {
 	return !!status && INACTIVE_STATUSES.has(status.toLowerCase());
 }
+
+const DONE_STATUSES = new Set(['implemented', 'accepted', 'active', 'completed', 'resolved']);
+
+/** Terminal "shipped/decided" statuses — used for implementation-progress rollups. */
+export function isDone(status: string | undefined): boolean {
+	return !!status && DONE_STATUSES.has(status.toLowerCase());
+}

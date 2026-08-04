@@ -340,7 +340,7 @@ dg init --eject            # Export all templates to .dg/templates/ for customiz
 
 Skills installed cover: opportunity, ADR, policy, incident, spec, diagram, team, image, Mermaid flowchart, Mermaid sequence.
 
-The MCP server (`dg-mcp`) exposes JSON-RPC tools over stdio for direct agent integration without the CLI: `dg-validate`, `dg-get`, `dg-list`, `dg-inspect`, `dg-describe`, `dg-set`, `dg-new`, `dg-refs`, `dg-graph`, `dg-check-code`, `dg-deprecate`.
+The MCP server (`dg-mcp`) exposes JSON-RPC tools over stdio for direct agent integration without the CLI: `dg-validate`, `dg-get`, `dg-list`, `dg-inspect`, `dg-describe`, `dg-set`, `dg-new`, `dg-refs`, `dg-graph`, `dg-deprecate`.
 
 ## Project structure
 

@@ -60,6 +60,9 @@ pub struct DocJson {
     /// Relative path to source markdown file (e.g. "docs/architecture/adr-001.md")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
+    /// Mermaid diagram generated from the doc's Gherkin scenarios (specs).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scenario_diagram: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -226,6 +229,8 @@ pub struct ServiceJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner_team: Option<String>,
     pub description: String,
+    /// Description rendered as markdown (inline code, links, emphasis).
+    pub description_html: String,
     pub readme_path: String,
     pub body_html: String,
     pub primary_language: String,
@@ -562,6 +567,8 @@ pub fn build_docs_json(
                 .and_then(|p| p.to_str())
                 .map(|s| s.to_string());
 
+            let scenario_diagram = scenario_diagram_for(&doc.body, id);
+
             DocJson {
                 id: id.clone(),
                 doc_type,
@@ -580,6 +587,7 @@ pub fn build_docs_json(
                 backlinks,
                 open_questions,
                 source_path,
+                scenario_diagram,
             }
         })
         .collect();
@@ -1647,6 +1655,12 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
                     .map(|(web_url, _branch)| web_url.clone())
             });
 
+        let description_html = if meta.description.is_empty() {
+            String::new()
+        } else {
+            render_markdown_to_html(&meta.description)
+        };
+
         services.push(ServiceJson {
             slug,
             name: meta.name,
@@ -1655,6 +1669,7 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
             owner,
             owner_team,
             description: meta.description,
+            description_html,
             readme_path: meta.readme_path,
             body_html,
             primary_language: meta.tech_stack.primary_language,
@@ -1996,13 +2011,64 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
     }
 }
 
+/// Generate a mermaid diagram from a doc body's ```gherkin fences, if any.
+#[cfg(feature = "gherkin")]
+fn scenario_diagram_for(body: &str, doc_id: &str) -> Option<String> {
+    let blocks = extract_gherkin_fences(body);
+    if blocks.is_empty() {
+        return None;
+    }
+    let result = dg_gherkin::process_blocks(&blocks, doc_id).ok()?;
+    if result.features.is_empty() {
+        return None;
+    }
+    let diagram = dg_gherkin::generate_diagram(
+        &result.features,
+        dg_gherkin::DiagramFormat::Mermaid,
+        dg_gherkin::DiagramStyle::Auto,
+    );
+    (!diagram.trim().is_empty()).then_some(diagram)
+}
+
+#[cfg(not(feature = "gherkin"))]
+fn scenario_diagram_for(_body: &str, _doc_id: &str) -> Option<String> {
+    None
+}
+
+/// Extract the contents of ```gherkin fenced code blocks from markdown.
+#[cfg(feature = "gherkin")]
+fn extract_gherkin_fences(body: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut current: Option<Vec<&str>> = None;
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        match &mut current {
+            Some(lines) => {
+                if trimmed.starts_with("```") {
+                    blocks.push(lines.join("\n"));
+                    current = None;
+                } else {
+                    lines.push(line);
+                }
+            }
+            None => {
+                let fence = trimmed.trim_start_matches('`');
+                if trimmed.starts_with("```") && fence.trim() == "gherkin" {
+                    current = Some(Vec::new());
+                }
+            }
+        }
+    }
+    blocks
+}
+
 fn write_json<T: Serialize>(path: &Path, data: &T) -> crate::error::Result<()> {
     let json = serde_json::to_string(data)?;
-    std::fs::write(path, json).map_err(|_| crate::error::Error::WriteFailed(path.to_path_buf()))
+    crate::site::write_atomic(path, json.as_bytes())
 }
 
 /// Extract string list from a YAML value (scalar → 1-item list, sequence → list).
-fn yaml_to_string_list(val: &serde_yaml::Value) -> Vec<String> {
+pub(crate) fn yaml_to_string_list(val: &serde_yaml::Value) -> Vec<String> {
     match val {
         serde_yaml::Value::String(s) => {
             if s.is_empty() {

@@ -29,7 +29,6 @@ pub fn handle_tool_call(name: &str, args: &Value) -> Result<Value> {
         "dg-refs" => tool_refs(args),
         "dg-graph" => tool_graph(args),
         "dg-deprecate" => tool_deprecate(args),
-        "dg-check-code" => tool_check_code(args),
         _ => bail!("unknown tool: {name}"),
     }
 }
@@ -609,39 +608,6 @@ fn tool_deprecate(args: &Value) -> Result<Value> {
         "id": doc_id,
         "written": true,
         "backlinks": backlinks,
-    }))
-}
-
-fn tool_check_code(args: &Value) -> Result<Value> {
-    let dir = require_str(args, "dir")?;
-    let schema = load_schema(args)?;
-    let files = str_array_arg(args, "files");
-
-    if files.is_empty() {
-        return Ok(json!({ "matches": [], "count": 0 }));
-    }
-
-    let matches = md_db::code_paths::check_code_paths(PathBuf::from(&dir), &schema, &files)
-        .context("check-code failed")?;
-
-    let items: Vec<Value> = matches
-        .iter()
-        .map(|m| {
-            json!({
-                "changed_file": m.changed_file,
-                "doc_id": m.doc_id,
-                "title": m.title,
-                "doc_type": m.doc_type,
-                "status": m.status,
-                "matched_pattern": m.matched_pattern,
-                "doc_path": m.doc_path,
-            })
-        })
-        .collect();
-
-    Ok(json!({
-        "matches": items,
-        "count": items.len(),
     }))
 }
 

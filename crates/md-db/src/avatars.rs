@@ -25,7 +25,10 @@ pub fn sync_avatars(dg_root: &Path, org: &OrgConfig) -> anyhow::Result<usize> {
 
     for (handle, user) in &org.users {
         let avatar_path = cache_dir.join(format!("{handle}.jpg"));
-        if avatar_path.exists() {
+        // `.none` marker = a previous lookup found no avatar; don't re-hit the
+        // rate-limited GitHub search API on every build.
+        let miss_marker = cache_dir.join(format!("{handle}.none"));
+        if avatar_path.exists() || miss_marker.exists() {
             continue;
         }
 
@@ -41,10 +44,12 @@ pub fn sync_avatars(dg_root: &Path, org: &OrgConfig) -> anyhow::Result<usize> {
                 fetched += 1;
             }
             Ok(None) => {
-                // No GitHub account found for this email — skip silently
+                // No GitHub account found for this email — remember the miss
+                let _ = std::fs::write(&miss_marker, b"");
             }
             Err(e) => {
                 eprintln!("Warning: failed to fetch avatar for @{handle}: {e}");
+                let _ = std::fs::write(&miss_marker, b"");
             }
         }
     }

@@ -74,7 +74,7 @@ dg new spec "Lama milk checkout flow" depends_on POL-001
 ## Status Lifecycle
 
 - `draft` — initial capture, scenarios being written
-- `review` — ready for stakeholder review
+- `proposed` — ready for stakeholder review
 - `approved` — signed off, ready for implementation
 - `implemented` — behavior verified in code
 - `deprecated` — no longer relevant

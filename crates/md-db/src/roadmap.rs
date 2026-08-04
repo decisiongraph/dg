@@ -804,7 +804,8 @@ fn render_gantt_header(
     html
 }
 
-/// Returns (start_col, end_col) in CSS grid coordinates, or None if no date.
+/// Returns (start_col, end_col) in CSS grid coordinates, or None if no date
+/// or the bar falls entirely outside the visible window.
 fn compute_bar_columns(
     item: &RoadmapItem,
     start_year: i32,
@@ -814,9 +815,17 @@ fn compute_bar_columns(
     let date = item.date.as_ref()?;
     let (y, m, _d) = parse_ymd(date)?;
     let duration = effort_to_months(item.effort.as_deref());
-    let idx = month_index(y, m, start_year, start_month);
-    let s = (idx + 2).max(2) as u32;
-    let e = (idx as u32 + 2 + duration).min(total_months + 2);
+    // month_index is negative for dates before the window start — compute in
+    // i64 and clamp, instead of casting a negative i32 to u32 (overflow panic).
+    let idx = month_index(y, m, start_year, start_month) as i64;
+    let max_col = (total_months + 2) as i64;
+    let raw_start = idx + 2;
+    let raw_end = raw_start + duration as i64;
+    if raw_end <= 2 || raw_start >= max_col {
+        return None;
+    }
+    let s = raw_start.clamp(2, max_col) as u32;
+    let e = raw_end.clamp(2, max_col) as u32;
     Some((s, e))
 }
 

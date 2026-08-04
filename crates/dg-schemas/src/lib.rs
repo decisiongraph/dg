@@ -89,9 +89,6 @@ pub const GEMINI_SETTINGS: &str = include_str!("../gemini-templates/settings.jso
 /// Gemini FIXME/TBD check hook script.
 pub const GEMINI_HOOK_CHECK_FIXME: &str = include_str!("../gemini-templates/hooks/check-fixme.sh");
 
-/// Gemini code-path check hook script.
-pub const GEMINI_HOOK_CHECK_CODE: &str = include_str!("../gemini-templates/hooks/check-code.sh");
-
 // --- OpenCode templates ---
 
 /// OpenCode opportunity skill (with YAML frontmatter).
@@ -133,10 +130,6 @@ pub const OPENCODE_SETTINGS: &str = include_str!("../opencode-templates/opencode
 /// OpenCode FIXME/TBD check hook script.
 pub const OPENCODE_HOOK_CHECK_FIXME: &str =
     include_str!("../opencode-templates/hooks/check-fixme.sh");
-
-/// OpenCode code-path check hook script.
-pub const OPENCODE_HOOK_CHECK_CODE: &str =
-    include_str!("../opencode-templates/hooks/check-code.sh");
 
 // --- Git hooks ---
 
@@ -258,10 +251,6 @@ pub static ALL_TEMPLATES: &[EmbeddedTemplate] = &[
         rel_path: "gemini/hooks/check-fixme.sh",
         content: GEMINI_HOOK_CHECK_FIXME,
     },
-    EmbeddedTemplate {
-        rel_path: "gemini/hooks/check-code.sh",
-        content: GEMINI_HOOK_CHECK_CODE,
-    },
     // OpenCode templates
     EmbeddedTemplate {
         rel_path: "opencode/skills/opportunity/SKILL.md",
@@ -306,10 +295,6 @@ pub static ALL_TEMPLATES: &[EmbeddedTemplate] = &[
     EmbeddedTemplate {
         rel_path: "opencode/hooks/check-fixme.sh",
         content: OPENCODE_HOOK_CHECK_FIXME,
-    },
-    EmbeddedTemplate {
-        rel_path: "opencode/hooks/check-code.sh",
-        content: OPENCODE_HOOK_CHECK_CODE,
     },
     // Git hooks
     EmbeddedTemplate {

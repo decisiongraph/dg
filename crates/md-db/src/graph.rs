@@ -89,7 +89,9 @@ impl DocGraph {
             let doc_type = fm
                 .get_display("type")
                 .or_else(|| schema.type_name_for_doc_id(&id));
-            let title = doc.title().or_else(|| fm.get_display("title"));
+            // Prefer the frontmatter title: doc.title() returns the FIRST heading
+            // of any level, which for docs without an H1 is a section like "Story"
+            let title = fm.get_display("title").or_else(|| doc.title());
             let status = fm.get_display("status");
 
             nodes.insert(

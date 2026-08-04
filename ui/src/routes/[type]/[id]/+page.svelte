@@ -14,6 +14,8 @@
 	import SourceFileLink from '$lib/components/SourceFileLink.svelte';
 	import { schemaData } from '$lib/stores/schema';
 	import { codeRefsData, loadCodeRefs, codeRefsForDoc } from '$lib/stores/code-refs';
+	import { isDone } from '$lib/utils';
+	import MiniGraph from '$lib/components/graph/MiniGraph.svelte';
 	import {
 		OUTGOING_LABELS,
 		INCOMING_LABELS,
@@ -28,10 +30,22 @@
 		title: string;
 		label: string;
 		relation: string;
+		status?: string;
+		docType?: string;
 	}
 
 	const docId = $derived(page.params.id?.toUpperCase() ?? '');
 	const doc = $derived($allDocs.find((d) => d.id.toLowerCase() === page.params.id?.toLowerCase()));
+
+	// Feed the generated scenario diagram through HtmlContent's mermaid path
+	const scenarioDiagramHtml = $derived(
+		doc?.scenario_diagram
+			? `<pre><code class="language-mermaid">${doc.scenario_diagram
+					.replaceAll('&', '&amp;')
+					.replaceAll('<', '&lt;')
+					.replaceAll('>', '&gt;')}</code></pre>`
+			: ''
+	);
 	const typeSlug = $derived(page.params.type ?? '');
 	const typeDisplay = $derived(
 		Object.values($docTypes).find((t) => t.folder === typeSlug)?.display ?? typeSlug
@@ -54,7 +68,14 @@
 				seen.add(key);
 				const refDoc = $allDocs.find((d) => d.id.toLowerCase() === ref.toLowerCase());
 				const items = buckets.get(cfg.category) ?? [];
-				items.push({ id: ref, title: refDoc?.title ?? ref, label: cfg.label, relation: rel });
+				items.push({
+					id: ref,
+					title: refDoc?.title ?? ref,
+					label: cfg.label,
+					relation: rel,
+					status: refDoc?.status,
+					docType: refDoc?.type
+				});
 				buckets.set(cfg.category, items);
 			}
 		}
@@ -66,12 +87,84 @@
 			const key = `${cfg.category}:${bl.id}:${bl.relation}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
+			const blDoc = $allDocs.find((d) => d.id.toLowerCase() === bl.id.toLowerCase());
 			const items = buckets.get(cfg.category) ?? [];
-			items.push({ id: bl.id, title: bl.title, label: cfg.label, relation: bl.relation });
+			items.push({
+				id: bl.id,
+				title: bl.title,
+				label: cfg.label,
+				relation: bl.relation,
+				status: blDoc?.status,
+				docType: blDoc?.type
+			});
 			buckets.set(cfg.category, items);
 		}
 
 		return buckets;
+	});
+
+	/** Implementation progress: docs that implement/depend on this one, by status */
+	const progressRollup = $derived.by(() => {
+		if (!doc) return undefined;
+		const children = doc.backlinks
+			.filter((bl) => bl.relation === 'implements' || bl.relation === 'depends_on')
+			.map((bl) => {
+				const child = $allDocs.find((d) => d.id.toLowerCase() === bl.id.toLowerCase());
+				return { id: bl.id, title: bl.title, status: child?.status, docType: child?.type };
+			});
+		if (children.length < 2) return undefined;
+		const done = children.filter((c) => isDone(c.status)).length;
+		return { children, done, total: children.length };
+	});
+
+	/** Stage specs linked to a proc doc, topologically ordered by depends_on */
+	const journeySpecs = $derived.by(() => {
+		if (!doc || doc.type !== 'proc') return [];
+		const near = new Set<string>();
+		for (const refs of Object.values(doc.links)) {
+			refs?.forEach((r) => near.add(r.toUpperCase()));
+		}
+		doc.backlinks.forEach((bl) => near.add(bl.id.toUpperCase()));
+
+		const specs = $allDocs.filter((d) => d.type === 'spec' && near.has(d.id.toUpperCase()));
+		if (specs.length === 0) return [];
+
+		// Kahn topo-sort on depends_on edges within the set; ID order breaks ties
+		const idSet = new Set(specs.map((s) => s.id.toUpperCase()));
+		const indegree = new Map<string, number>(specs.map((s) => [s.id.toUpperCase(), 0]));
+		const dependents = new Map<string, string[]>();
+		for (const s of specs) {
+			for (const dep of s.links['depends_on'] ?? []) {
+				const depId = dep.toUpperCase();
+				if (!idSet.has(depId)) continue;
+				indegree.set(s.id.toUpperCase(), (indegree.get(s.id.toUpperCase()) ?? 0) + 1);
+				dependents.set(depId, [...(dependents.get(depId) ?? []), s.id.toUpperCase()]);
+			}
+		}
+		const byId = new Map(specs.map((s) => [s.id.toUpperCase(), s]));
+		const queue = specs
+			.filter((s) => (indegree.get(s.id.toUpperCase()) ?? 0) === 0)
+			.map((s) => s.id.toUpperCase())
+			.sort();
+		const ordered: typeof specs = [];
+		while (queue.length > 0) {
+			const id = queue.shift()!;
+			ordered.push(byId.get(id)!);
+			for (const next of dependents.get(id) ?? []) {
+				const deg = (indegree.get(next) ?? 1) - 1;
+				indegree.set(next, deg);
+				if (deg === 0) queue.push(next);
+			}
+			queue.sort();
+		}
+		// Cycle fallback: append anything the sort missed
+		for (const s of specs) {
+			if (!ordered.includes(s)) ordered.push(s);
+		}
+		return ordered.map((s) => ({
+			doc: s,
+			refCount: codeRefsForDoc($codeRefsData, s.id)?.code?.length ?? 0
+		}));
 	});
 
 	/** People entries: { role, handles[] } sorted with author/owner first */
@@ -289,7 +382,7 @@
 	}
 
 	/** Sidebar shows when there are relations OR commit refs */
-	const hasSidebar = $derived(sidebarSections.size > 0 || hasCommitRefs);
+	const hasSidebar = $derived(sidebarSections.size > 0 || hasCommitRefs || !!progressRollup);
 
 	function typeFolder(type: string): string {
 		return $docTypes[type]?.folder ?? type;
@@ -493,15 +586,115 @@
 
 				<Separator />
 
+				{#if journeySpecs.length > 0}
+					<!-- Stage specs of this process, ordered by depends_on chain -->
+					<div class="px-6 pt-6" data-testid="journey-strip">
+						<h2 class="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+							Stage specs
+						</h2>
+						<div class="flex flex-wrap items-center gap-1.5">
+							{#each journeySpecs as stage, i (stage.doc.id)}
+								{#if i > 0}
+									<span class="text-muted-foreground/60">→</span>
+								{/if}
+								<DocRefLink refId={stage.doc.id}>
+									<span class="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs hover:bg-accent transition-colors">
+										<span class="font-mono text-[10px] text-muted-foreground">{stage.doc.id}</span>
+										<span class="max-w-48 truncate font-medium">{stage.doc.title}</span>
+										<StatusBadge status={stage.doc.status} docType="spec" class="text-[9px]" />
+										{#if stage.refCount > 0}
+											<span class="text-[10px] text-muted-foreground" title="{stage.refCount} code references">
+												{stage.refCount} refs
+											</span>
+										{/if}
+									</span>
+								</DocRefLink>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				{#if scenarioDiagramHtml}
+					<!-- Flow overview generated from the doc's Gherkin scenarios -->
+					<div class="px-6 pt-6">
+						<h2 class="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+							Scenario flow
+						</h2>
+						<div class="rounded-lg border bg-card p-3 overflow-x-auto">
+							<HtmlContent html={scenarioDiagramHtml} />
+						</div>
+					</div>
+				{/if}
+
 				<!-- Body content -->
 				<div class="doc-body prose prose-slate dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-primary min-w-0 p-6">
 					<HtmlContent html={doc.body_html} />
 				</div>
+
+				<!-- Depth-2 relation neighborhood -->
+				{#if Object.values(doc.links).some((refs) => refs?.length) || doc.backlinks.length > 0}
+					<div class="px-6 pb-6">
+						<div class="mb-2 flex items-center justify-between">
+							<h2 class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								Related documents
+							</h2>
+							<a
+								href="/graph?focus={doc.id.toLowerCase()}"
+								class="text-xs text-primary hover:underline"
+							>
+								View in full graph →
+							</a>
+						</div>
+						<MiniGraph focusId={doc.id} />
+					</div>
+				{/if}
 			</article>
 
 			<!-- Sidebar: Relations + Commits -->
 			{#if hasSidebar}
 				<aside class="mt-8 xl:mt-0 space-y-4 xl:sticky xl:top-20 xl:self-start min-w-0">
+					<!-- Implementation progress rollup over implements/depends_on backlinks -->
+					{#if progressRollup}
+						<Card.Root class="py-3 gap-2" style="border-top: 2px solid #10b981;" data-testid="progress-rollup">
+							<Card.Header class="pb-0">
+								<Card.Title class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+									Implementation progress
+								</Card.Title>
+							</Card.Header>
+							<Card.Content class="grid gap-2">
+								<div class="flex items-center justify-between text-xs">
+									<span class="font-medium text-foreground">
+										{progressRollup.done}/{progressRollup.total} done
+									</span>
+									<span class="text-muted-foreground">
+										{Math.round((progressRollup.done / progressRollup.total) * 100)}%
+									</span>
+								</div>
+								<div class="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+									<div
+										class="h-full rounded-full bg-emerald-500 transition-all"
+										style="width: {(progressRollup.done / progressRollup.total) * 100}%"
+									></div>
+								</div>
+								<div class="grid gap-1">
+									{#each progressRollup.children as child (child.id)}
+										<DocRefLink refId={child.id}>
+											<span class="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-accent transition-colors">
+												<span class="truncate text-xs text-foreground">
+													<span class="font-mono text-[10px] text-muted-foreground">{child.id}</span>
+													{child.title}
+												</span>
+												{#if child.status}
+													<StatusBadge status={child.status} docType={child.docType} class="text-[9px] shrink-0" />
+												{/if}
+											</span>
+										</DocRefLink>
+									{/each}
+								</div>
+							</Card.Content>
+						</Card.Root>
+					{/if}
+
 					{#each SIDEBAR_SECTIONS as section (section.key)}
 						{@const items = sidebarSections.get(section.key)}
 						{#if items?.length}
@@ -524,6 +717,9 @@
 													</span>
 												</span>
 												<span class="text-xs font-medium leading-snug text-foreground line-clamp-2 break-words">{item.title}</span>
+												{#if item.status}
+													<StatusBadge status={item.status} docType={item.docType} class="text-[9px] self-start" />
+												{/if}
 											</span>
 										</DocRefLink>
 									{/each}
