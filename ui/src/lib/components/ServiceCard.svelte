@@ -117,7 +117,13 @@
 	<div class="flex items-start justify-between gap-2">
 		<div class="min-w-0 flex-1">
 			<h3 class="text-sm font-semibold text-foreground">{service.name}</h3>
-			{#if service.description}
+			{#if service.description_html}
+				<div
+					class="mt-0.5 text-xs text-muted-foreground line-clamp-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.7rem]"
+				>
+					{@html service.description_html}
+				</div>
+			{:else if service.description}
 				<p class="mt-0.5 text-xs text-muted-foreground line-clamp-2">{service.description}</p>
 			{/if}
 		</div>

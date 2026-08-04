@@ -159,6 +159,7 @@ export interface ServiceEntry {
 	owner: string;
 	owner_team?: string;
 	description: string;
+	description_html?: string;
 	readme_path: string;
 	source_url?: string;
 	body_html: string;

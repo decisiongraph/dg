@@ -2,6 +2,7 @@
 	import { allDocs, docTypes } from '$lib/stores/docs';
 	import * as HoverCard from '$lib/components/ui/hover-card/index.js';
 	import StatusBadge from './StatusBadge.svelte';
+	import { firstSection } from '$lib/actions/content-refs';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -15,28 +16,6 @@
 	const folder = $derived($docTypes[refType]?.folder ?? refType);
 	const href = $derived(`/${folder}/${refId.toLowerCase()}`);
 	const refDoc = $derived($allDocs.find((d) => d.id.toLowerCase() === refId.toLowerCase()));
-
-	/** Extract first heading + first paragraph from body HTML */
-	function firstSection(html: string): { heading?: string; body: string } {
-		const headingRe = /<h[1-6][^>]*>(.*?)<\/h[1-6]>/;
-		const hMatch = html.match(headingRe);
-		const strip = (s: string) => s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-
-		if (hMatch) {
-			const heading = strip(hMatch[1]);
-			const after = html.slice(html.indexOf(hMatch[0]) + hMatch[0].length);
-			const nextH = after.search(/<h[1-6]/);
-			const sectionHtml = nextH >= 0 ? after.slice(0, nextH) : after;
-			// First <p> in section
-			const pMatch = sectionHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-			const body = pMatch ? strip(pMatch[1]) : strip(sectionHtml);
-			return { heading, body };
-		}
-
-		// No heading — first paragraph
-		const pMatch = html.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-		return { body: pMatch ? strip(pMatch[1]) : strip(html) };
-	}
 
 	const preview = $derived(refDoc?.body_html ? firstSection(refDoc.body_html) : undefined);
 </script>

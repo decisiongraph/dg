@@ -121,7 +121,13 @@
 						{service.name}
 					</h1>
 
-					{#if service.description}
+					{#if service.description_html}
+						<div
+							class="text-sm text-muted-foreground mb-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_a]:text-primary"
+						>
+							{@html service.description_html}
+						</div>
+					{:else if service.description}
 						<p class="text-sm text-muted-foreground mb-3">{service.description}</p>
 					{/if}
 
@@ -225,7 +231,7 @@
 								{/each}
 							</div>
 
-							{#if service.frameworks?.length > 0}
+							{#if service.frameworks?.length > 0 && service.kind !== 'infra'}
 								<div class="flex flex-wrap gap-1.5 pt-1">
 									{#each service.frameworks as fw (fw)}
 										{@const version = service.framework_versions?.find(
@@ -243,6 +249,30 @@
 									{/each}
 								</div>
 							{/if}
+						</Card.Content>
+					</Card.Root>
+				{/if}
+
+				<!-- Cloud platforms managed by this infra (from provider sources) -->
+				{#if service.kind === 'infra' && service.frameworks?.length > 0}
+					<Card.Root>
+						<Card.Header class="pb-2">
+							<Card.Title
+								class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+								>Managed Platforms</Card.Title
+							>
+						</Card.Header>
+						<Card.Content>
+							<div class="flex flex-wrap gap-1.5">
+								{#each service.frameworks as platform (platform)}
+									<span
+										class="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
+									>
+										<DeviconIcon name={platform} size="sm" />
+										{platform}
+									</span>
+								{/each}
+							</div>
 						</Card.Content>
 					</Card.Root>
 				{/if}

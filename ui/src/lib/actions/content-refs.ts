@@ -26,7 +26,7 @@ function shouldSkip(node: Node): boolean {
 }
 
 /** Extract first heading + first paragraph from body HTML */
-function firstSection(html: string): { heading?: string; body: string } {
+export function firstSection(html: string): { heading?: string; body: string } {
 	const headingRe = /<h[1-6][^>]*>(.*?)<\/h[1-6]>/;
 	const hMatch = html.match(headingRe);
 	const strip = (s: string) => {

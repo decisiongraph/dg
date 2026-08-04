@@ -229,6 +229,8 @@ pub struct ServiceJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner_team: Option<String>,
     pub description: String,
+    /// Description rendered as markdown (inline code, links, emphasis).
+    pub description_html: String,
     pub readme_path: String,
     pub body_html: String,
     pub primary_language: String,
@@ -1653,6 +1655,12 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
                     .map(|(web_url, _branch)| web_url.clone())
             });
 
+        let description_html = if meta.description.is_empty() {
+            String::new()
+        } else {
+            render_markdown_to_html(&meta.description)
+        };
+
         services.push(ServiceJson {
             slug,
             name: meta.name,
@@ -1661,6 +1669,7 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
             owner,
             owner_team,
             description: meta.description,
+            description_html,
             readme_path: meta.readme_path,
             body_html,
             primary_language: meta.tech_stack.primary_language,
