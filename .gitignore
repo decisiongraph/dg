@@ -1,6 +1,5 @@
 # Rust
 /target
-Cargo.lock
 
 # Do not include the generated code from Claude Code eval tests
 cc-eval/target
@@ -16,6 +15,9 @@ cc-eval/cc-eval/evals/
 # OS
 .DS_Store
 Thumbs.db
+
+# Nix build output
+/result
 
 # Devenv
 .devenv*
