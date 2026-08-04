@@ -23,6 +23,10 @@ static DEVICON_MAP: LazyLock<HashMap<&'static str, (&'static str, &'static str)>
         m.insert(".net", ("csharp", "original"));
         m.insert("html", ("html5", "original"));
         m.insert("css", ("css3", "original"));
+        m.insert("elixir", ("elixir", "original"));
+        m.insert("terraform", ("terraform", "original"));
+        // Devicon has no OpenTofu icon yet; reuse the Terraform one.
+        m.insert("opentofu", ("terraform", "original"));
 
         // Frameworks
         m.insert("rails", ("rails", "plain"));
@@ -37,6 +41,7 @@ static DEVICON_MAP: LazyLock<HashMap<&'static str, (&'static str, &'static str)>
         m.insert("svelte", ("svelte", "original"));
         m.insert("fastapi", ("fastapi", "original"));
         m.insert("nestjs", ("nestjs", "plain"));
+        m.insert("phoenix", ("phoenix", "original"));
 
         // Deployment platforms
         m.insert("docker", ("docker", "plain"));
@@ -48,6 +53,16 @@ static DEVICON_MAP: LazyLock<HashMap<&'static str, (&'static str, &'static str)>
             "aws elastic beanstalk",
             ("amazonwebservices", "plain-wordmark"),
         );
+        m.insert("cloudflare", ("cloudflare", "original"));
+        m.insert("cloudflare pages", ("cloudflare", "original"));
+        m.insert("cloudflare workers", ("cloudflareworkers", "original"));
+
+        // Cloud platforms (Terraform/OpenTofu provider pills)
+        m.insert("google cloud", ("googlecloud", "original"));
+        m.insert("gcp", ("googlecloud", "original"));
+        m.insert("azure", ("azure", "original"));
+        m.insert("kubernetes", ("kubernetes", "plain"));
+        m.insert("digitalocean", ("digitalocean", "original"));
 
         // Databases
         m.insert("postgresql", ("postgresql", "plain"));
