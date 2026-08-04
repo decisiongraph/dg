@@ -95,7 +95,7 @@ Always use `dg new` and `dg set` — never create or edit markdown files manuall
 
 | Scalar (use `=`) | Array (use `+=`) |
 |---|---|
-| status, title, date, author, supersedes, superseded_by, enabled_by, triggered_by | tags, implements, depends_on, related, conflicts_with, responders, code_paths |
+| status, title, date, author, supersedes, superseded_by, enabled_by, triggered_by | tags, implements, depends_on, related, conflicts_with, responders |
 
 Wrong: `dg set ADR-001 superseded_by+=ADR-010` (creates array `[ADR-010]`)
 Right: `dg set ADR-001 superseded_by=ADR-010` (sets scalar)

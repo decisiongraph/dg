@@ -18,10 +18,6 @@
           {
             "type": "command",
             "command": "dg hooks check-fixme \"$CLAUDE_FILE_PATH\""
-          },
-          {
-            "type": "command",
-            "command": "dg hooks check-code \"$CLAUDE_FILE_PATH\""
           }
         ]
       }

@@ -11,9 +11,7 @@ pub mod ast_util;
 /// File-content hash cache for incremental validation.
 #[allow(missing_docs)]
 pub mod cache;
-/// Code-path matching: map changed source files to related decision docs.
-pub mod code_paths;
-/// Coverage metrics: completeness, linkage, freshness, code_paths %.
+/// Coverage metrics: completeness, linkage, freshness.
 pub mod coverage;
 /// Structural diff between two document versions.
 #[allow(missing_docs)]

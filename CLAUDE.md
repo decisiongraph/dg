@@ -13,7 +13,7 @@ Markdown-as-database: YAML frontmatter parsing, KDL schema validation, document 
 User-facing CLI. Depends on md-db for all document operations, markdown-tui for terminal rendering.
 
 ### crates/dg-mcp — MCP server (`dg-mcp`)
-JSON-RPC over stdio. 11 tools: dg-validate, dg-get, dg-list, dg-inspect, dg-describe, dg-set, dg-new, dg-refs, dg-graph, dg-check-code, dg-deprecate.
+JSON-RPC over stdio. 10 tools: dg-validate, dg-get, dg-list, dg-inspect, dg-describe, dg-set, dg-new, dg-refs, dg-graph, dg-deprecate.
 
 ### crates/dg-schemas — Built-in schemas & templates
 Embeds KDL schema, Claude/Gemini/OpenCode templates, org.kdl template via `include_str!`. Pure data crate. Exports `ALL_TEMPLATES`, `SCHEMA`, `CLAUDE_MD`, skill templates, etc.

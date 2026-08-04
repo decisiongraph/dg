@@ -38,7 +38,6 @@ fn print_text(report: &coverage::CoverageReport) {
     println!("\nMetrics:");
     println!("  Completeness:  {:.0}%", report.completeness_pct);
     println!("  Linkage:       {:.0}%", report.linkage_pct);
-    println!("  Code paths:    {:.0}%", report.code_paths_pct);
     println!("  Stale docs:    {}", report.stale_count);
 
     // Stale docs detail
@@ -73,19 +72,6 @@ fn print_text(report: &coverage::CoverageReport) {
             println!("  {}: {}", f.doc_id, f.path);
         }
     }
-
-    // Missing code_paths
-    let no_cp: Vec<_> = report
-        .files
-        .iter()
-        .filter(|f| matches!(f.doc_type.as_deref(), Some("adr") | Some("pol")) && !f.has_code_paths)
-        .collect();
-    if !no_cp.is_empty() {
-        println!("\nADR/POL without code_paths:");
-        for f in &no_cp {
-            println!("  {}: {}", f.doc_id, f.path);
-        }
-    }
 }
 
 fn print_json(report: &coverage::CoverageReport) {
@@ -99,7 +85,6 @@ fn print_json(report: &coverage::CoverageReport) {
         }).collect::<Vec<_>>(),
         "completeness_pct": (report.completeness_pct * 10.0).round() / 10.0,
         "linkage_pct": (report.linkage_pct * 10.0).round() / 10.0,
-        "code_paths_pct": (report.code_paths_pct * 10.0).round() / 10.0,
         "stale_count": report.stale_count,
         "files": report.files.iter().map(|f| {
             serde_json::json!({
@@ -109,7 +94,6 @@ fn print_json(report: &coverage::CoverageReport) {
                 "field_completeness": (f.field_completeness * 10.0).round() / 10.0,
                 "section_completeness": (f.section_completeness * 10.0).round() / 10.0,
                 "has_refs": f.has_refs,
-                "has_code_paths": f.has_code_paths,
                 "is_stale": f.is_stale,
             })
         }).collect::<Vec<_>>(),

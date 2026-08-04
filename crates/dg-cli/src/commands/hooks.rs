@@ -23,11 +23,6 @@ pub enum HooksCommand {
         /// Path to the file that was written
         file_path: Option<String>,
     },
-    /// Check if changed files match decision doc code_paths
-    CheckCode {
-        /// Changed file paths (from git diff or CLI args)
-        files: Vec<String>,
-    },
     /// Git prepare-commit-msg hook: auto-add Refs trailer for staged docs
     PrepareCommitMsg {
         /// Path to the commit message file
@@ -51,7 +46,6 @@ pub enum HooksCommand {
 pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
     match &args.command {
         HooksCommand::CheckFixme { file_path } => check_fixme(file_path.as_deref(), root),
-        HooksCommand::CheckCode { files } => check_code(root, files),
         HooksCommand::PrepareCommitMsg {
             message_file,
             source,
@@ -94,50 +88,6 @@ fn check_fixme(file_path: Option<&str>, root: &Path) -> Result<()> {
         eprintln!("   Only leave markers if user says they don't know or asks you to proceed.");
         eprintln!();
     }
-
-    Ok(())
-}
-
-fn check_code(root: &Path, files: &[String]) -> Result<()> {
-    if files.is_empty() {
-        return Ok(());
-    }
-
-    let dg_dir = root.join(".dg");
-    if !dg_dir.is_dir() {
-        return Ok(());
-    }
-
-    let schema = load_schema(&dg_dir)?;
-
-    let matches =
-        md_db::code_paths::check_code_paths(root, &schema, files).context("check-code failed")?;
-
-    if matches.is_empty() {
-        return Ok(());
-    }
-
-    // Group by changed file
-    let mut by_file: std::collections::BTreeMap<&str, Vec<&md_db::code_paths::CodePathMatch>> =
-        std::collections::BTreeMap::new();
-    for m in &matches {
-        by_file.entry(&m.changed_file).or_default().push(m);
-    }
-
-    eprintln!();
-    eprintln!(
-        "⚠️  {} file(s) match decision doc code_paths:",
-        by_file.len()
-    );
-    for (file, doc_matches) in &by_file {
-        for m in doc_matches {
-            let title = m.title.as_deref().unwrap_or("untitled");
-            let status = m.status.as_deref().unwrap_or("unknown");
-            eprintln!("   {file}  →  {} \"{title}\" ({status})", m.doc_id);
-        }
-    }
-    eprintln!("   Review these docs and update if your changes affect the decisions.");
-    eprintln!();
 
     Ok(())
 }
@@ -558,10 +508,7 @@ mod tests {
     #[test]
     fn gemini_hook_scripts_subcommands_match_implementation() {
         let valid = valid_hook_subcommand_names();
-        for (name, content) in [
-            ("check-fixme.sh", dg_schemas::GEMINI_HOOK_CHECK_FIXME),
-            ("check-code.sh", dg_schemas::GEMINI_HOOK_CHECK_CODE),
-        ] {
+        for (name, content) in [("check-fixme.sh", dg_schemas::GEMINI_HOOK_CHECK_FIXME)] {
             for cmd in extract_hook_subcommands(content) {
                 assert!(
                     valid.contains(&cmd),
@@ -574,10 +521,7 @@ mod tests {
     #[test]
     fn opencode_hook_scripts_subcommands_match_implementation() {
         let valid = valid_hook_subcommand_names();
-        for (name, content) in [
-            ("check-fixme.sh", dg_schemas::OPENCODE_HOOK_CHECK_FIXME),
-            ("check-code.sh", dg_schemas::OPENCODE_HOOK_CHECK_CODE),
-        ] {
+        for (name, content) in [("check-fixme.sh", dg_schemas::OPENCODE_HOOK_CHECK_FIXME)] {
             for cmd in extract_hook_subcommands(content) {
                 assert!(
                     valid.contains(&cmd),

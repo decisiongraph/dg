@@ -157,19 +157,6 @@ fn tool_list() -> Value {
             }
         },
         {
-            "name": "dg-check-code",
-            "description": "Check which decision documents are related to changed source files via code_paths.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "dir":    { "type": "string", "description": "Project root directory" },
-                    "schema": { "type": "string", "description": "Path to KDL schema file" },
-                    "files":  { "type": "array",  "items": { "type": "string" }, "description": "Changed file paths to check" }
-                },
-                "required": ["dir", "schema", "files"]
-            }
-        },
-        {
             "name": "dg-deprecate",
             "description": "Mark a document as deprecated or superseded.",
             "inputSchema": {

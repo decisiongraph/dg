@@ -591,18 +591,6 @@ fn write_gemini_files(root: &Path, agents_md_exists: bool) -> Result<()> {
     .context("failed to write check-fixme.sh")?;
     make_executable(&script_path)?;
 
-    let script_path = hooks_dir.join("check-code.sh");
-    fs::write(
-        &script_path,
-        resolve(
-            root,
-            "gemini/hooks/check-code.sh",
-            dg_schemas::GEMINI_HOOK_CHECK_CODE,
-        ),
-    )
-    .context("failed to write check-code.sh")?;
-    make_executable(&script_path)?;
-
     Ok(())
 }
 
@@ -751,18 +739,6 @@ fn write_opencode_files(root: &Path, agents_md_exists: bool) -> Result<()> {
         ),
     )
     .context("failed to write check-fixme.sh")?;
-    make_executable(&script_path)?;
-
-    let script_path = hooks_dir.join("check-code.sh");
-    fs::write(
-        &script_path,
-        resolve(
-            root,
-            "opencode/hooks/check-code.sh",
-            dg_schemas::OPENCODE_HOOK_CHECK_CODE,
-        ),
-    )
-    .context("failed to write check-code.sh")?;
     make_executable(&script_path)?;
 
     Ok(())
