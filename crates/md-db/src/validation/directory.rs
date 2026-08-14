@@ -109,6 +109,7 @@ pub fn validate_directory(
         validate_license_file(&files, dir, schema, &mut file_results);
         validate_team_docs(dir, user_config, &mut file_results);
         validate_service_readmes(dir, &mut file_results);
+        validate_dependabot(dir, &mut file_results);
     }
 
     // Strip root prefix so paths are relative to project root
@@ -337,6 +338,101 @@ fn validate_team_docs(
                 }],
             });
         }
+    }
+}
+
+/// SV011/SV012/SV013: warn when a GitHub-hosted project lacks Dependabot coverage.
+/// Skipped entirely for projects not hosted on github.com or using Renovate.
+fn validate_dependabot(dir: &Path, file_results: &mut Vec<FileResult>) {
+    match crate::code_refs::detect_repo_web_url(dir) {
+        Some((url, _)) if url.starts_with("https://github.com/") => {}
+        _ => return,
+    }
+    dependabot_diagnostics(dir, file_results);
+}
+
+/// Dependabot coverage checks without the GitHub-hosting gate (separate for testability).
+pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResult>) {
+    use crate::dependabot as db;
+
+    if db::has_renovate(dir) {
+        return;
+    }
+
+    let hits = db::detect_ecosystems(dir);
+    if !hits.is_empty() {
+        let config_path = db::find_config(dir);
+        let labels = hits.iter().map(db::EcosystemHit::label).collect::<Vec<_>>();
+        match config_path {
+            None => {
+                file_results.push(FileResult {
+                    path: dir.join(".github/dependabot.yml").display().to_string(),
+                    diagnostics: vec![Diagnostic {
+                        severity: Severity::Warning,
+                        code: "SV011".into(),
+                        message: format!(
+                            "GitHub-hosted project has no .github/dependabot.yml but {} package ecosystem(s) were detected",
+                            hits.len()
+                        ),
+                        location: ".github/dependabot.yml".into(),
+                        hint: Some(format!(
+                            "run `dg init --dependabot` to generate one covering: {}",
+                            labels.join(", ")
+                        )),
+                    }],
+                });
+            }
+            Some(path) => {
+                if let Ok(text) = std::fs::read_to_string(&path) {
+                    let missing = db::uncovered_hits(&text, &hits);
+                    if !missing.is_empty() {
+                        let missing_labels = missing
+                            .iter()
+                            .map(db::EcosystemHit::label)
+                            .collect::<Vec<_>>();
+                        file_results.push(FileResult {
+                            path: path.display().to_string(),
+                            diagnostics: vec![Diagnostic {
+                                severity: Severity::Warning,
+                                code: "SV012".into(),
+                                message: format!(
+                                    "dependabot.yml is missing updates entries for {} detected ecosystem(s)",
+                                    missing.len()
+                                ),
+                                location: ".github/dependabot.yml".into(),
+                                hint: Some(format!(
+                                    "add package-ecosystem entries for: {}",
+                                    missing_labels.join(", ")
+                                )),
+                            }],
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Dependabot's nix ecosystem only covers flake.lock — devenv.lock needs a workflow
+    if db::detect_devenv(dir) && !db::has_devenv_update_workflow(dir) {
+        file_results.push(FileResult {
+            path: dir
+                .join(".github/workflows/update-devenv-lock.yml")
+                .display()
+                .to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Warning,
+                code: "SV013".into(),
+                message: "devenv.lock drifts silently: Dependabot does not cover devenv and no \
+                          `devenv update` workflow was found"
+                    .into(),
+                location: ".github/workflows/".into(),
+                hint: Some(
+                    "run `dg init --dependabot` to generate a scheduled workflow that runs \
+                     `devenv update` and opens a PR"
+                        .into(),
+                ),
+            }],
+        });
     }
 }
 

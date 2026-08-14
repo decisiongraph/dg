@@ -44,6 +44,9 @@ pub enum Command {
         /// Export all built-in templates to .dg/templates/ for customization
         #[arg(long)]
         eject: bool,
+        /// Generate .github/dependabot.yml (and nix update workflow) without prompting
+        #[arg(long)]
+        dependabot: bool,
     },
     /// Create a new document
     New(new::NewArgs),

@@ -13,6 +13,8 @@ pub mod ast_util;
 pub mod cache;
 /// Coverage metrics: completeness, linkage, freshness.
 pub mod coverage;
+/// Dependabot ecosystem detection and coverage checks.
+pub mod dependabot;
 /// Structural diff between two document versions.
 #[allow(missing_docs)]
 pub mod diff;

@@ -56,9 +56,17 @@ fn run() -> Result<()> {
             with_gemini,
             with_opencode,
             eject,
+            dependabot,
         } => {
             let root = cli.root.unwrap_or_else(|| PathBuf::from("."));
-            return commands::init::run(&root, *with_claude, *with_gemini, *with_opencode, *eject);
+            return commands::init::run(
+                &root,
+                *with_claude,
+                *with_gemini,
+                *with_opencode,
+                *eject,
+                *dependabot,
+            );
         }
         Command::Guide(args) => {
             return commands::guide::run(args);

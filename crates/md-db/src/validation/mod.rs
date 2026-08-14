@@ -19,7 +19,8 @@ use crate::users::OrgConfig;
 pub(crate) use content::{check_broken_tables, check_image_paths};
 #[cfg(test)]
 pub(crate) use directory::{
-    validate_license_file, validate_service_readmes, validate_singleton_presence,
+    dependabot_diagnostics, validate_license_file, validate_service_readmes,
+    validate_singleton_presence,
 };
 #[cfg(test)]
 pub(crate) use document::singleton_matches;
@@ -1450,5 +1451,125 @@ type "service-readme" folder="services" singleton=#true {
         );
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn codes(results: &[FileResult]) -> Vec<String> {
+        results
+            .iter()
+            .flat_map(|r| r.diagnostics.iter().map(|d| d.code.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn test_dependabot_missing_config_sv011() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        assert!(
+            codes(&results).contains(&"SV011".to_string()),
+            "missing dependabot.yml with manifests should trigger SV011: {results:?}"
+        );
+    }
+
+    #[test]
+    fn test_dependabot_no_manifests_no_warning() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        assert!(
+            results.is_empty(),
+            "no manifests should produce no diagnostics: {results:?}"
+        );
+    }
+
+    #[test]
+    fn test_dependabot_uncovered_ecosystem_sv012() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        std::fs::create_dir_all(dir.path().join("services/api")).unwrap();
+        std::fs::write(dir.path().join("services/api/mix.exs"), "").unwrap();
+        std::fs::create_dir_all(dir.path().join(".github")).unwrap();
+        std::fs::write(
+            dir.path().join(".github/dependabot.yml"),
+            "version: 2\nupdates:\n  - package-ecosystem: cargo\n    directory: /\n    schedule:\n      interval: weekly\n",
+        )
+        .unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        let codes = codes(&results);
+        assert!(
+            codes.contains(&"SV012".to_string()),
+            "uncovered mix ecosystem should trigger SV012: {results:?}"
+        );
+        assert!(!codes.contains(&"SV011".to_string()));
+    }
+
+    #[test]
+    fn test_dependabot_full_coverage_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        std::fs::create_dir_all(dir.path().join(".github")).unwrap();
+        std::fs::write(
+            dir.path().join(".github/dependabot.yml"),
+            "version: 2\nupdates:\n  - package-ecosystem: cargo\n    directory: /\n    schedule:\n      interval: weekly\n",
+        )
+        .unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        assert!(
+            results.is_empty(),
+            "fully covered project should produce no diagnostics: {results:?}"
+        );
+    }
+
+    #[test]
+    fn test_dependabot_renovate_suppresses() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+        std::fs::write(dir.path().join("renovate.json"), "{}").unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        assert!(
+            results.is_empty(),
+            "renovate config should suppress dependabot warnings: {results:?}"
+        );
+    }
+
+    #[test]
+    fn test_dependabot_nix_sv013() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("devenv.nix"), "{ }\n").unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        assert!(
+            codes(&results).contains(&"SV013".to_string()),
+            "devenv.nix without update workflow should trigger SV013: {results:?}"
+        );
+    }
+
+    #[test]
+    fn test_dependabot_nix_workflow_present_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("devenv.nix"), "{ }\n").unwrap();
+        std::fs::create_dir_all(dir.path().join(".github/workflows")).unwrap();
+        std::fs::write(
+            dir.path().join(".github/workflows/nix.yml"),
+            "name: nix\njobs:\n  update:\n    steps:\n      - run: devenv update\n",
+        )
+        .unwrap();
+
+        let mut results = Vec::new();
+        dependabot_diagnostics(dir.path(), &mut results);
+        assert!(
+            !codes(&results).contains(&"SV013".to_string()),
+            "existing nix update workflow should suppress SV013: {results:?}"
+        );
     }
 }
