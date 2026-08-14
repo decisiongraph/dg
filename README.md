@@ -73,6 +73,14 @@ dg refs ADR-001 --backlinks          # Show what references ADR-001
 
 Type aliases: `opportunity`→opp, `architecture`/`tech`→adr, `policy`→pol, `incident`→inc, `feature`→spec.
 
+When the project is in a Git repository with a remote, `dg new` reserves numbers
+for every document type by pushing namespaced tags such as `dg/adr-001`. This
+prevents two contributors from selecting the same number concurrently. The
+`fork` remote is preferred, then `origin`, then the first configured remote.
+For older repositories without reservation tags, files on the remote's default
+branch are also scanned before choosing the next number. Projects without a
+remote continue to allocate numbers from local documents.
+
 ## Document types
 
 | Type | Aliases | Prefix | Folder | Purpose |
