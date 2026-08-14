@@ -68,6 +68,7 @@ pub fn run(
     with_gemini: bool,
     with_opencode: bool,
     eject: bool,
+    dependabot: bool,
 ) -> Result<()> {
     let dg_dir = root.join(".dg");
     let dg_exists = dg_dir.is_dir();
@@ -161,6 +162,9 @@ pub fn run(
     // Install git hooks if inside a git repo
     install_git_hooks(root);
 
+    // Offer Dependabot config for GitHub-hosted repos with detected package manifests
+    setup_dependabot(root, dependabot)?;
+
     eprintln!("initialized dg project in {}", root.display());
 
     // Always create CLAUDE.md with dg instructions (useful even without claude CLI)
@@ -229,6 +233,64 @@ pub fn run(
     }
 
     eprintln!("\nrun `dg init --eject` to customize schema and templates");
+
+    Ok(())
+}
+
+/// Offer/generate `.github/dependabot.yml` and a nix lockfile update workflow.
+///
+/// Without `force`, only acts on GitHub-hosted repos and asks for confirmation
+/// (skipped silently in non-interactive mode). With `force` (`--dependabot`),
+/// generates without prompting and without requiring a GitHub remote.
+fn setup_dependabot(root: &Path, force: bool) -> Result<()> {
+    use md_db::dependabot as db;
+
+    if !force {
+        let is_github = matches!(
+            md_db::code_refs::detect_repo_web_url(root),
+            Some((url, _)) if url.starts_with("https://github.com/")
+        );
+        if !is_github {
+            return Ok(());
+        }
+    }
+    if db::has_renovate(root) {
+        return Ok(());
+    }
+
+    let hits = db::detect_ecosystems(root);
+    if !hits.is_empty() && db::find_config(root).is_none() {
+        let labels: Vec<String> = hits.iter().map(db::EcosystemHit::label).collect();
+        eprintln!("  dependabot: detected {}", labels.join(", "));
+        if force || confirm("create .github/dependabot.yml covering these?") {
+            let path = root.join(".github").join("dependabot.yml");
+            fs::create_dir_all(root.join(".github")).context("failed to create .github/")?;
+            fs::write(&path, db::generate_config(&hits))
+                .context("failed to write .github/dependabot.yml")?;
+            eprintln!("  dependabot: .github/dependabot.yml created");
+        } else {
+            eprintln!("  dependabot: skipped (rerun with `dg init --dependabot` to generate)");
+        }
+    }
+
+    // Dependabot's nix ecosystem only covers flake.lock — devenv.lock needs a workflow
+    if db::detect_devenv(root) && !db::has_devenv_update_workflow(root) {
+        eprintln!("  devenv: Dependabot does not cover devenv.lock; needs a scheduled workflow");
+        if force || confirm("create .github/workflows/update-devenv-lock.yml?") {
+            let workflows = root.join(".github").join("workflows");
+            fs::create_dir_all(&workflows).context("failed to create .github/workflows/")?;
+            let content = resolve(
+                root,
+                "github/update-devenv-lock.yml",
+                md_db::dependabot::DEVENV_UPDATE_WORKFLOW,
+            );
+            fs::write(workflows.join("update-devenv-lock.yml"), content)
+                .context("failed to write update-devenv-lock.yml")?;
+            eprintln!("  devenv: .github/workflows/update-devenv-lock.yml created");
+        } else {
+            eprintln!("  devenv: skipped (rerun with `dg init --dependabot` to generate)");
+        }
+    }
 
     Ok(())
 }

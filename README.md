@@ -120,6 +120,9 @@ dg set OPP-001 --remove tags                      # Remove a field
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes
 dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
+# GitHub-hosted projects: warns when detected package ecosystems (cargo, npm, mix,
+# docker, terraform, nix, ...) lack .github/dependabot.yml coverage (SV011/SV012),
+# and when devenv.lock has no scheduled `devenv update` workflow (SV013).
 dg suggest                           # Advisory improvement suggestions
 
 # Inspect schema
@@ -344,6 +347,7 @@ dg init --with-claude      # Force Claude Code setup (CLAUDE.md + .claude/skills
 dg init --with-gemini      # Force Gemini CLI setup (AGENTS.md + .gemini/skills/)
 dg init --with-opencode    # Force OpenCode setup   (AGENTS.md + .opencode/skills/)
 dg init --eject            # Export all templates to .dg/templates/ for customization
+dg init --dependabot       # Generate .github/dependabot.yml + devenv update workflow
 ```
 
 Skills installed cover: opportunity, ADR, policy, incident, spec, diagram, team, image, Mermaid flowchart, Mermaid sequence.
