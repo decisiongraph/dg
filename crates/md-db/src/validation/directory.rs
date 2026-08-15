@@ -442,14 +442,97 @@ pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResu
 pub struct ServiceCheckOptions {
     /// Skip auto-installing JS dependencies when node_modules is missing.
     pub no_install: bool,
+    /// Print progress lines to stderr while checks run.
+    pub progress: bool,
+}
+
+/// A service with detected checks, planned before any command runs.
+struct ServicePlan {
+    service_dir: PathBuf,
+    rel: String,
+    location: String,
+    js: Option<crate::toolchain::JsToolchain>,
+    linter_tool: Option<String>,
+    test_framework: Option<String>,
 }
 
 /// Run detected linters and test suites for services/apps/infra.
 /// Produces SV006/SV007 (linters), SV009/SV010 (tests) and SV014
 /// (JS dependencies not installed) diagnostics.
+///
+/// Checks run in parallel across services (linter and tests of one service
+/// stay sequential — they may share build state like _build/ or target/).
 pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<FileResult> {
     let mut results = Vec::new();
     let mut ctx = crate::toolchain::ToolchainContext::new(dir, opts.no_install);
+
+    let plans = plan_service_checks(dir);
+
+    // Install JS deps serially, once per workspace root (cached in ctx) —
+    // concurrent installs into one package store would race.
+    let mut runnable = Vec::new();
+    for plan in plans {
+        if let Some(js) = &plan.js {
+            if opts.progress
+                && !opts.no_install
+                && !crate::toolchain::js_deps_present(&js.workspace_root)
+            {
+                eprintln!(
+                    "dg: installing JS dependencies ({}) in {}",
+                    js.pm.name(),
+                    js.workspace_root.display()
+                );
+            }
+            if let Some(diag) = ensure_js_deps_diagnostic(&mut ctx, js, &plan.location) {
+                results.push(FileResult {
+                    path: plan.rel.clone(),
+                    diagnostics: vec![diag],
+                });
+                // Running tools without deps would produce misleading
+                // SV007/SV010 failures.
+                continue;
+            }
+        }
+        runnable.push(plan);
+    }
+
+    if runnable.is_empty() {
+        return results;
+    }
+
+    let check_count: usize = runnable
+        .iter()
+        .map(|p| p.linter_tool.is_some() as usize + p.test_framework.is_some() as usize)
+        .sum();
+    let jobs = default_check_jobs().min(runnable.len());
+    if opts.progress {
+        eprintln!(
+            "dg: running {check_count} check(s) across {} service(s), {jobs} service(s) in parallel",
+            runnable.len()
+        );
+    }
+
+    let progress = opts.progress;
+    let run_all = || -> Vec<Vec<FileResult>> {
+        runnable
+            .par_iter()
+            .map(|plan| run_service_plan(&ctx, plan, progress))
+            .collect()
+    };
+    // Dedicated pool so heavyweight test suites don't fan out to every core;
+    // fall back to the global pool if building one fails.
+    let per_service = match rayon::ThreadPoolBuilder::new().num_threads(jobs).build() {
+        Ok(pool) => pool.install(run_all),
+        Err(_) => run_all(),
+    };
+    results.extend(per_service.into_iter().flatten());
+
+    results
+}
+
+/// Discover services and their detected checks without running any commands.
+fn plan_service_checks(dir: &Path) -> Vec<ServicePlan> {
+    let mut plans = Vec::new();
     let dirs = ["services", "apps", "infra"];
 
     for kind_dir in &dirs {
@@ -487,11 +570,11 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<Fi
 
             let linter_tool = practices
                 .has_linter
-                .then_some(practices.linter_tool.as_deref())
+                .then_some(practices.linter_tool.clone())
                 .flatten();
             let test_framework = practices
                 .has_tests
-                .then_some(practices.test_framework.as_deref())
+                .then_some(practices.test_framework.clone())
                 .flatten();
 
             if linter_tool.is_none() && test_framework.is_none() {
@@ -504,37 +587,50 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<Fi
                 "JavaScript" | "TypeScript" | "Node.js"
             );
             let js = is_js.then(|| crate::toolchain::detect_js_toolchain(&service_dir, dir));
-            if let Some(js) = &js {
-                if let Some(diag) = ensure_js_deps_diagnostic(&mut ctx, js, &location) {
-                    results.push(FileResult {
-                        path: rel,
-                        diagnostics: vec![diag],
-                    });
-                    // Running tools without deps would produce misleading
-                    // SV007/SV010 failures.
-                    continue;
-                }
-            }
 
-            if let Some(tool) = linter_tool {
-                if let Some(fr) =
-                    check_service_linter(&ctx, &service_dir, tool, js.as_ref(), &rel, &location)
-                {
-                    results.push(fr);
-                }
-            }
-
-            if let Some(framework) = test_framework {
-                if let Some(fr) =
-                    check_service_tests(&ctx, &service_dir, framework, js.as_ref(), &rel, &location)
-                {
-                    results.push(fr);
-                }
-            }
+            plans.push(ServicePlan {
+                service_dir,
+                rel,
+                location,
+                js,
+                linter_tool,
+                test_framework,
+            });
         }
     }
 
-    results
+    // read_dir order is platform-dependent; sort for stable output.
+    plans.sort_by(|a, b| a.rel.cmp(&b.rel));
+    plans
+}
+
+/// Concurrency for service checks, detected from the CPU. Each check is an
+/// external process that may parallelize internally (vitest, mix test), so
+/// leave half the cores for that instead of spawning one check per core.
+fn default_check_jobs() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| (n.get() / 2).max(2))
+        .unwrap_or(2)
+}
+
+/// Run the planned checks for one service: linter first, then tests.
+fn run_service_plan(
+    ctx: &crate::toolchain::ToolchainContext,
+    plan: &ServicePlan,
+    progress: bool,
+) -> Vec<FileResult> {
+    let mut out = Vec::new();
+    if let Some(tool) = plan.linter_tool.as_deref() {
+        if let Some(fr) = check_service_linter(ctx, plan, tool, progress) {
+            out.push(fr);
+        }
+    }
+    if let Some(framework) = plan.test_framework.as_deref() {
+        if let Some(fr) = check_service_tests(ctx, plan, framework, progress) {
+            out.push(fr);
+        }
+    }
+    out
 }
 
 /// Ensure JS deps are installed; return an SV014 diagnostic when they are
@@ -589,21 +685,50 @@ fn ensure_js_deps_diagnostic(
     })
 }
 
+/// Print a start line for a check ("dg: → services/care/ lint: mix credo").
+fn progress_start(location: &str, phase: &str, program: &str, args: &[String]) {
+    eprintln!("dg: → {location} {phase}: {program} {}", args.join(" "));
+}
+
+/// Print a finish line with elapsed time ("dg: ✓ services/care/ lint (Credo) 12.3s").
+fn progress_done(location: &str, phase: &str, tool: &str, ok: bool, started: std::time::Instant) {
+    let mark = if ok { "✓" } else { "✗" };
+    let secs = started.elapsed().as_secs_f32();
+    eprintln!("dg: {mark} {location} {phase} ({tool}) {secs:.1}s");
+}
+
 /// Run the detected linter and produce SV006/SV007 diagnostics.
 fn check_service_linter(
     ctx: &crate::toolchain::ToolchainContext,
-    service_dir: &Path,
+    plan: &ServicePlan,
     tool: &str,
-    js: Option<&crate::toolchain::JsToolchain>,
-    rel: &str,
-    location: &str,
+    progress: bool,
 ) -> Option<FileResult> {
+    let (service_dir, js, rel, location) = (
+        plan.service_dir.as_path(),
+        plan.js.as_ref(),
+        plan.rel.as_str(),
+        plan.location.as_str(),
+    );
     let mut cmd = crate::service::resolve_lint_command(tool, js)?;
     let (program, args) = ctx.finalize(&cmd.program, cmd.args.clone());
     cmd.program = program;
     cmd.args = args;
 
+    let started = std::time::Instant::now();
+    if progress {
+        progress_start(location, "lint", &cmd.program, &cmd.args);
+    }
     let lint_result = crate::service::run_linter(service_dir, &cmd);
+    if progress {
+        progress_done(
+            location,
+            "lint",
+            tool,
+            lint_result.success && !lint_result.command_not_found,
+            started,
+        );
+    }
 
     if lint_result.command_not_found {
         let mut hint = format!("install {tool} or set has_linter: false in frontmatter");
@@ -670,18 +795,35 @@ fn check_service_linter(
 /// Run the detected test suite and produce SV009/SV010 diagnostics.
 fn check_service_tests(
     ctx: &crate::toolchain::ToolchainContext,
-    service_dir: &Path,
+    plan: &ServicePlan,
     framework: &str,
-    js: Option<&crate::toolchain::JsToolchain>,
-    rel: &str,
-    location: &str,
+    progress: bool,
 ) -> Option<FileResult> {
+    let (service_dir, js, rel, location) = (
+        plan.service_dir.as_path(),
+        plan.js.as_ref(),
+        plan.rel.as_str(),
+        plan.location.as_str(),
+    );
     let mut cmd = crate::service::resolve_test_command(framework, js)?;
     let (program, args) = ctx.finalize(&cmd.program, cmd.args.clone());
     cmd.program = program;
     cmd.args = args;
 
+    let started = std::time::Instant::now();
+    if progress {
+        progress_start(location, "test", &cmd.program, &cmd.args);
+    }
     let test_result = crate::service::run_tests(service_dir, &cmd);
+    if progress {
+        progress_done(
+            location,
+            "test",
+            framework,
+            test_result.success && !test_result.command_not_found,
+            started,
+        );
+    }
 
     if test_result.command_not_found {
         let mut hint = format!("install {framework} or set has_tests: false in frontmatter");
