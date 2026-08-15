@@ -51,14 +51,15 @@ pub fn run(
         .context("validation failed")?;
 
     // Run detected linters and test suites only when not filtering by pattern or doc ID
+    let mut check_timings = Vec::new();
     if args.pattern.is_none() && args.doc_id.is_none() {
         let opts = validation::ServiceCheckOptions {
             no_install: args.no_install,
             progress,
         };
-        result
-            .file_results
-            .extend(validation::validate_service_checks(root, &opts));
+        let outcome = validation::validate_service_checks(root, &opts);
+        result.file_results.extend(outcome.file_results);
+        check_timings = outcome.timings;
     }
 
     // Filter out skipped diagnostic codes
@@ -75,6 +76,16 @@ pub fn run(
             let json = serde_json::json!({
                 "errors": result.total_errors(),
                 "warnings": result.total_warnings(),
+                "checks": check_timings.iter().map(|c| {
+                    serde_json::json!({
+                        "location": c.location,
+                        "phase": c.phase,
+                        "tool": c.tool,
+                        "command": c.command,
+                        "seconds": c.secs,
+                        "ok": c.ok,
+                    })
+                }).collect::<Vec<_>>(),
                 "files": result.file_results.iter().filter(|f| !f.diagnostics.is_empty()).map(|f| {
                     serde_json::json!({
                         "path": f.path,
@@ -95,9 +106,31 @@ pub fn run(
         _ => print!("{}", result.to_report()),
     }
 
+    if args.format != "json" {
+        print_check_durations(&check_timings);
+    }
+
     if !result.is_ok() {
         anyhow::bail!("validation failed: {} error(s)", result.total_errors());
     }
 
     Ok(())
+}
+
+/// Show where the wall-clock time went (stderr, slowest first) — the service
+/// linters/tests dominate, not dg itself.
+pub fn print_check_durations(timings: &[validation::CheckTiming]) {
+    if timings.is_empty() {
+        return;
+    }
+    let mut sorted: Vec<_> = timings.iter().collect();
+    sorted.sort_by(|a, b| b.secs.total_cmp(&a.secs));
+    eprintln!("\nService check durations (slowest first):");
+    for c in sorted {
+        let mark = if c.ok { "✓" } else { "✗" };
+        eprintln!(
+            "  {mark} {:>7.1}s  {} {} ({}: `{}`)",
+            c.secs, c.location, c.phase, c.tool, c.command
+        );
+    }
 }

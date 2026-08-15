@@ -132,6 +132,11 @@ dg lint                              # Validate + graph health (orphans, cycles,
 # Phoenix services whose config/test.exs binds a hardcoded port with
 # `server: true` (Wallaby setups) get SV015 suggesting `port: 0` + a runtime-
 # resolved base_url, so parallel test runs can't collide.
+# Service checks run in parallel across services with live progress on stderr,
+# and a per-check duration summary afterwards (slowest first) — so a slow run
+# is attributable to the service's own test suite, not dg. ExUnit suites
+# dominated by sync tests (which run one at a time) get SV016 suggesting
+# `async: true` conversion for files that don't touch global state.
 dg suggest                           # Advisory improvement suggestions
 
 # Inspect schema

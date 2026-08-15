@@ -3,7 +3,10 @@ pub(crate) mod directory;
 pub mod document;
 mod types;
 
-pub use directory::{validate_directory, validate_service_checks, ServiceCheckOptions};
+pub use directory::{
+    validate_directory, validate_service_checks, CheckTiming, ServiceCheckOptions,
+    ServiceCheckOutcome,
+};
 pub use document::{error_diagnostic, infer_type_from_path, validate_document, validate_singleton};
 pub use types::{Diagnostic, FileResult, Severity, ValidationResult};
 

@@ -446,6 +446,29 @@ pub struct ServiceCheckOptions {
     pub progress: bool,
 }
 
+/// Timing of one executed service check command, so callers can show that
+/// the time went into the service's own linter/test suite, not dg.
+#[derive(Debug, Clone)]
+pub struct CheckTiming {
+    /// Service location, e.g. "services/care/".
+    pub location: String,
+    /// "lint" or "test".
+    pub phase: &'static str,
+    /// Tool name, e.g. "ExUnit" or "Credo".
+    pub tool: String,
+    /// Command that was run, e.g. "mix test".
+    pub command: String,
+    pub secs: f32,
+    pub ok: bool,
+}
+
+/// Diagnostics plus per-command timings from service checks.
+#[derive(Debug, Default)]
+pub struct ServiceCheckOutcome {
+    pub file_results: Vec<FileResult>,
+    pub timings: Vec<CheckTiming>,
+}
+
 /// A service with detected checks, planned before any command runs.
 struct ServicePlan {
     service_dir: PathBuf,
@@ -462,7 +485,7 @@ struct ServicePlan {
 ///
 /// Checks run in parallel across services (linter and tests of one service
 /// stay sequential — they may share build state like _build/ or target/).
-pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<FileResult> {
+pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> ServiceCheckOutcome {
     let mut results = Vec::new();
     let mut ctx = crate::toolchain::ToolchainContext::new(dir, opts.no_install);
 
@@ -497,7 +520,10 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<Fi
     }
 
     if runnable.is_empty() {
-        return results;
+        return ServiceCheckOutcome {
+            file_results: results,
+            timings: Vec::new(),
+        };
     }
 
     let check_count: usize = runnable
@@ -513,7 +539,7 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<Fi
     }
 
     let progress = opts.progress;
-    let run_all = || -> Vec<Vec<FileResult>> {
+    let run_all = || -> Vec<(Vec<FileResult>, Vec<CheckTiming>)> {
         runnable
             .par_iter()
             .map(|plan| run_service_plan(&ctx, plan, progress))
@@ -525,9 +551,17 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<Fi
         Ok(pool) => pool.install(run_all),
         Err(_) => run_all(),
     };
-    results.extend(per_service.into_iter().flatten());
 
-    results
+    let mut timings = Vec::new();
+    for (frs, ts) in per_service {
+        results.extend(frs);
+        timings.extend(ts);
+    }
+
+    ServiceCheckOutcome {
+        file_results: results,
+        timings,
+    }
 }
 
 /// Discover services and their detected checks without running any commands.
@@ -618,19 +652,20 @@ fn run_service_plan(
     ctx: &crate::toolchain::ToolchainContext,
     plan: &ServicePlan,
     progress: bool,
-) -> Vec<FileResult> {
+) -> (Vec<FileResult>, Vec<CheckTiming>) {
     let mut out = Vec::new();
+    let mut timings = Vec::new();
     if let Some(tool) = plan.linter_tool.as_deref() {
-        if let Some(fr) = check_service_linter(ctx, plan, tool, progress) {
-            out.push(fr);
-        }
+        let (fr, timing) = check_service_linter(ctx, plan, tool, progress);
+        out.extend(fr);
+        timings.extend(timing);
     }
     if let Some(framework) = plan.test_framework.as_deref() {
-        if let Some(fr) = check_service_tests(ctx, plan, framework, progress) {
-            out.push(fr);
-        }
+        let (fr, timing) = check_service_tests(ctx, plan, framework, progress);
+        out.extend(fr);
+        timings.extend(timing);
     }
-    out
+    (out, timings)
 }
 
 /// Ensure JS deps are installed; return an SV014 diagnostic when they are
@@ -703,14 +738,16 @@ fn check_service_linter(
     plan: &ServicePlan,
     tool: &str,
     progress: bool,
-) -> Option<FileResult> {
+) -> (Option<FileResult>, Option<CheckTiming>) {
     let (service_dir, js, rel, location) = (
         plan.service_dir.as_path(),
         plan.js.as_ref(),
         plan.rel.as_str(),
         plan.location.as_str(),
     );
-    let mut cmd = crate::service::resolve_lint_command(tool, js)?;
+    let Some(mut cmd) = crate::service::resolve_lint_command(tool, js) else {
+        return (None, None);
+    };
     let (program, args) = ctx.finalize(&cmd.program, cmd.args.clone());
     cmd.program = program;
     cmd.args = args;
@@ -720,15 +757,18 @@ fn check_service_linter(
         progress_start(location, "lint", &cmd.program, &cmd.args);
     }
     let lint_result = crate::service::run_linter(service_dir, &cmd);
+    let ok = lint_result.success && !lint_result.command_not_found;
     if progress {
-        progress_done(
-            location,
-            "lint",
-            tool,
-            lint_result.success && !lint_result.command_not_found,
-            started,
-        );
+        progress_done(location, "lint", tool, ok, started);
     }
+    let timing = (!lint_result.command_not_found).then(|| CheckTiming {
+        location: location.to_string(),
+        phase: "lint",
+        tool: tool.to_string(),
+        command: format!("{} {}", cmd.program, cmd.args.join(" ")),
+        secs: started.elapsed().as_secs_f32(),
+        ok,
+    });
 
     if lint_result.command_not_found {
         let mut hint = format!("install {tool} or set has_linter: false in frontmatter");
@@ -736,20 +776,23 @@ fn check_service_linter(
             hint.push_str("\n        ");
             hint.push_str(&env_hint);
         }
-        return Some(FileResult {
-            path: rel.to_string(),
-            diagnostics: vec![Diagnostic {
-                severity: Severity::Warning,
-                code: "SV006".into(),
-                message: format!("linter \"{tool}\" detected but not installed"),
-                location: location.to_string(),
-                hint: Some(hint),
-            }],
-        });
+        return (
+            Some(FileResult {
+                path: rel.to_string(),
+                diagnostics: vec![Diagnostic {
+                    severity: Severity::Warning,
+                    code: "SV006".into(),
+                    message: format!("linter \"{tool}\" detected but not installed"),
+                    location: location.to_string(),
+                    hint: Some(hint),
+                }],
+            }),
+            timing,
+        );
     }
 
     if lint_result.success {
-        return None;
+        return (None, timing);
     }
 
     let issue_count = lint_result.issues.len();
@@ -780,32 +823,38 @@ fn check_service_linter(
         Some(hint_lines.join("\n        "))
     };
 
-    Some(FileResult {
-        path: rel.to_string(),
-        diagnostics: vec![Diagnostic {
-            severity: Severity::Error,
-            code: "SV007".into(),
-            message: label,
-            location: location.to_string(),
-            hint,
-        }],
-    })
+    (
+        Some(FileResult {
+            path: rel.to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Error,
+                code: "SV007".into(),
+                message: label,
+                location: location.to_string(),
+                hint,
+            }],
+        }),
+        timing,
+    )
 }
 
-/// Run the detected test suite and produce SV009/SV010 diagnostics.
+/// Run the detected test suite and produce SV009/SV010 diagnostics, plus
+/// SV016 when a passing ExUnit suite is dominated by sync tests.
 fn check_service_tests(
     ctx: &crate::toolchain::ToolchainContext,
     plan: &ServicePlan,
     framework: &str,
     progress: bool,
-) -> Option<FileResult> {
+) -> (Option<FileResult>, Option<CheckTiming>) {
     let (service_dir, js, rel, location) = (
         plan.service_dir.as_path(),
         plan.js.as_ref(),
         plan.rel.as_str(),
         plan.location.as_str(),
     );
-    let mut cmd = crate::service::resolve_test_command(framework, js)?;
+    let Some(mut cmd) = crate::service::resolve_test_command(framework, js) else {
+        return (None, None);
+    };
     let (program, args) = ctx.finalize(&cmd.program, cmd.args.clone());
     cmd.program = program;
     cmd.args = args;
@@ -815,15 +864,18 @@ fn check_service_tests(
         progress_start(location, "test", &cmd.program, &cmd.args);
     }
     let test_result = crate::service::run_tests(service_dir, &cmd);
+    let ok = test_result.success && !test_result.command_not_found;
     if progress {
-        progress_done(
-            location,
-            "test",
-            framework,
-            test_result.success && !test_result.command_not_found,
-            started,
-        );
+        progress_done(location, "test", framework, ok, started);
     }
+    let timing = (!test_result.command_not_found).then(|| CheckTiming {
+        location: location.to_string(),
+        phase: "test",
+        tool: framework.to_string(),
+        command: format!("{} {}", cmd.program, cmd.args.join(" ")),
+        secs: started.elapsed().as_secs_f32(),
+        ok,
+    });
 
     if test_result.command_not_found {
         let mut hint = format!("install {framework} or set has_tests: false in frontmatter");
@@ -831,20 +883,26 @@ fn check_service_tests(
             hint.push_str("\n        ");
             hint.push_str(&env_hint);
         }
-        return Some(FileResult {
-            path: rel.to_string(),
-            diagnostics: vec![Diagnostic {
-                severity: Severity::Warning,
-                code: "SV009".into(),
-                message: format!("test runner \"{framework}\" detected but not installed"),
-                location: location.to_string(),
-                hint: Some(hint),
-            }],
-        });
+        return (
+            Some(FileResult {
+                path: rel.to_string(),
+                diagnostics: vec![Diagnostic {
+                    severity: Severity::Warning,
+                    code: "SV009".into(),
+                    message: format!("test runner \"{framework}\" detected but not installed"),
+                    location: location.to_string(),
+                    hint: Some(hint),
+                }],
+            }),
+            timing,
+        );
     }
 
     if test_result.success {
-        return None;
+        let advisory = (framework == "ExUnit")
+            .then(|| exunit_sync_heavy_diagnostic(service_dir, &test_result.stdout, rel, location))
+            .flatten();
+        return (advisory, timing);
     }
 
     let code = test_result
@@ -855,16 +913,96 @@ fn check_service_tests(
     // the output tail (stderr appended when present).
     let hint = crate::toolchain::output_preview(&test_result.stdout, &test_result.stderr, 12);
 
+    (
+        Some(FileResult {
+            path: rel.to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Error,
+                code: "SV010".into(),
+                message: format!("{framework} failed{code} in {location}"),
+                location: location.to_string(),
+                hint,
+            }],
+        }),
+        timing,
+    )
+}
+
+/// Sync time must exceed both this floor and 2x the async time before SV016
+/// fires — small suites gain nothing from async conversion.
+const SYNC_HEAVY_FLOOR_SECS: f32 = 30.0;
+
+/// SV016: a passing ExUnit suite dominated by sync tests runs serially even
+/// though ExUnit parallelizes `async: true` modules across cores.
+fn exunit_sync_heavy_diagnostic(
+    service_dir: &Path,
+    stdout: &str,
+    rel: &str,
+    location: &str,
+) -> Option<FileResult> {
+    let (async_secs, sync_secs) = parse_exunit_split(stdout)?;
+    if sync_secs < SYNC_HEAVY_FLOOR_SECS || sync_secs <= 2.0 * async_secs {
+        return None;
+    }
+    let (total_files, sync_files) = count_sync_test_files(&service_dir.join("test"));
+
     Some(FileResult {
         path: rel.to_string(),
         diagnostics: vec![Diagnostic {
-            severity: Severity::Error,
-            code: "SV010".into(),
-            message: format!("{framework} failed{code} in {location}"),
+            severity: Severity::Warning,
+            code: "SV016".into(),
+            message: format!(
+                "test suite spends {sync_secs:.0}s in sync tests vs {async_secs:.0}s async in {location} — sync tests run one at a time"
+            ),
             location: location.to_string(),
-            hint,
+            hint: Some(format!(
+                "{sync_files} of {total_files} *_test.exs files lack `async: true`. \
+                 Flip files that don't touch global state (no Application.put_env, \
+                 set_mox_global, or shared named processes) to `use ..., async: true` \
+                 so ExUnit runs them concurrently; revert any that then flake"
+            )),
         }],
     })
+}
+
+/// Parse "(15.1s async, 75.1s sync)" from ExUnit's "Finished in …" line.
+fn parse_exunit_split(stdout: &str) -> Option<(f32, f32)> {
+    static RE: std::sync::LazyLock<Option<regex::Regex>> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\(([0-9.]+)s async, ([0-9.]+)s sync\)").ok()
+    });
+    let caps = RE.as_ref()?.captures(stdout)?;
+    Some((caps[1].parse().ok()?, caps[2].parse().ok()?))
+}
+
+/// Count `*_test.exs` files under `dir` and how many lack `async: true`.
+fn count_sync_test_files(dir: &Path) -> (usize, usize) {
+    let mut total = 0;
+    let mut sync = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.ends_with("_test.exs"))
+            {
+                total += 1;
+                if !std::fs::read_to_string(&path)
+                    .unwrap_or_default()
+                    .contains("async: true")
+                {
+                    sync += 1;
+                }
+            }
+        }
+    }
+    (total, sync)
 }
 
 /// SV015: a Phoenix test config that binds a hardcoded port with
@@ -1234,4 +1372,49 @@ fn eol_today_str() -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     format!("{y:04}-{m:02}-{d:02}")
+}
+
+#[cfg(test)]
+mod check_timing_tests {
+    use super::*;
+
+    #[test]
+    fn parses_exunit_async_sync_split() {
+        let out = "....\nFinished in 90.2 seconds (15.1s async, 75.1s sync)\n2199 tests";
+        assert_eq!(parse_exunit_split(out), Some((15.1, 75.1)));
+        assert_eq!(parse_exunit_split("Finished in 1.2 seconds"), None);
+        assert_eq!(parse_exunit_split(""), None);
+    }
+
+    #[test]
+    fn sync_heavy_needs_floor_and_ratio() {
+        let tmp = tempfile::tempdir().unwrap();
+        let fire = "Finished in 90.2 seconds (15.1s async, 75.1s sync)";
+        let fast = "Finished in 9.0 seconds (2.0s async, 7.0s sync)";
+        let balanced = "Finished in 90.0 seconds (45.0s async, 45.0s sync)";
+
+        let fr =
+            exunit_sync_heavy_diagnostic(tmp.path(), fire, "services/a/README.md", "services/a/");
+        let fr = fr.expect("sync-heavy suite should fire SV016");
+        assert_eq!(fr.diagnostics[0].code, "SV016");
+        assert!(fr.diagnostics[0].message.contains("75s in sync tests"));
+
+        assert!(exunit_sync_heavy_diagnostic(tmp.path(), fast, "r", "l").is_none());
+        assert!(exunit_sync_heavy_diagnostic(tmp.path(), balanced, "r", "l").is_none());
+    }
+
+    #[test]
+    fn counts_sync_test_files_recursively() {
+        let tmp = tempfile::tempdir().unwrap();
+        let nested = tmp.path().join("test/care/deep");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(
+            tmp.path().join("test/a_test.exs"),
+            "use Care.DataCase, async: true\n",
+        )
+        .unwrap();
+        std::fs::write(nested.join("b_test.exs"), "use Care.DataCase\n").unwrap();
+        std::fs::write(nested.join("helper.ex"), "").unwrap();
+        assert_eq!(count_sync_test_files(&tmp.path().join("test")), (2, 1));
+    }
 }

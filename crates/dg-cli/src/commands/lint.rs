@@ -37,14 +37,14 @@ pub fn run(
         no_install: args.no_install,
         progress: std::io::stderr().is_terminal(),
     };
-    result
-        .file_results
-        .extend(validation::validate_service_checks(root, &opts));
+    let outcome = validation::validate_service_checks(root, &opts);
+    result.file_results.extend(outcome.file_results);
 
     if !result.is_ok() {
         has_errors = true;
     }
     print!("{}", result.to_report());
+    super::validate::print_check_durations(&outcome.timings);
 
     // 2. Graph health checks
     let graph = DocGraph::build_cached(root, schema, cache).context("failed to build doc graph")?;
