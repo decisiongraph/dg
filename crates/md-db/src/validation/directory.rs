@@ -109,6 +109,7 @@ pub fn validate_directory(
         validate_license_file(&files, dir, schema, &mut file_results);
         validate_team_docs(dir, user_config, &mut file_results);
         validate_service_readmes(dir, &mut file_results);
+        validate_hardcoded_test_ports(dir, &mut file_results);
         validate_dependabot(dir, &mut file_results);
     }
 
@@ -436,9 +437,19 @@ pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResu
     }
 }
 
-/// Run detected linters for services/apps/infra and produce SV006/SV007 diagnostics.
-pub fn validate_service_linters(dir: &Path) -> Vec<FileResult> {
+/// Options for running service linter/test checks.
+#[derive(Debug, Default, Clone)]
+pub struct ServiceCheckOptions {
+    /// Skip auto-installing JS dependencies when node_modules is missing.
+    pub no_install: bool,
+}
+
+/// Run detected linters and test suites for services/apps/infra.
+/// Produces SV006/SV007 (linters), SV009/SV010 (tests) and SV014
+/// (JS dependencies not installed) diagnostics.
+pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Vec<FileResult> {
     let mut results = Vec::new();
+    let mut ctx = crate::toolchain::ToolchainContext::new(dir, opts.no_install);
     let dirs = ["services", "apps", "infra"];
 
     for kind_dir in &dirs {
@@ -459,6 +470,7 @@ pub fn validate_service_linters(dir: &Path) -> Vec<FileResult> {
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
             let rel = format!("{kind_dir}/{folder_name}/README.md");
+            let location = format!("{kind_dir}/{folder_name}/");
 
             let tech = crate::service::extract_tech_stack(&service_dir);
             let fm = readme
@@ -473,88 +485,51 @@ pub fn validate_service_linters(dir: &Path) -> Vec<FileResult> {
                 fm_ref,
             );
 
-            if !practices.has_linter {
+            let linter_tool = practices
+                .has_linter
+                .then_some(practices.linter_tool.as_deref())
+                .flatten();
+            let test_framework = practices
+                .has_tests
+                .then_some(practices.test_framework.as_deref())
+                .flatten();
+
+            if linter_tool.is_none() && test_framework.is_none() {
                 continue;
             }
 
-            let tool = match &practices.linter_tool {
-                Some(t) => t,
-                None => continue,
-            };
-
-            let cmd = match crate::service::resolve_lint_command(tool) {
-                Some(c) => c,
-                None => continue,
-            };
-
-            let lint_result = crate::service::run_linter(&service_dir, &cmd);
-
-            if lint_result.command_not_found {
-                results.push(FileResult {
-                    path: rel.clone(),
-                    diagnostics: vec![Diagnostic {
-                        severity: Severity::Warning,
-                        code: "SV006".into(),
-                        message: format!("linter \"{tool}\" detected but not installed"),
-                        location: format!("{kind_dir}/{folder_name}/"),
-                        hint: Some(format!(
-                            "install {tool} or set has_linter: false in frontmatter"
-                        )),
-                    }],
-                });
-                continue;
+            // JS services need node_modules before any tool can run.
+            let is_js = matches!(
+                tech.primary_language.as_str(),
+                "JavaScript" | "TypeScript" | "Node.js"
+            );
+            let js = is_js.then(|| crate::toolchain::detect_js_toolchain(&service_dir, dir));
+            if let Some(js) = &js {
+                if let Some(diag) = ensure_js_deps_diagnostic(&mut ctx, js, &location) {
+                    results.push(FileResult {
+                        path: rel,
+                        diagnostics: vec![diag],
+                    });
+                    // Running tools without deps would produce misleading
+                    // SV007/SV010 failures.
+                    continue;
+                }
             }
 
-            if !lint_result.success {
-                let issue_count = lint_result.issues.len();
-                let label = if issue_count > 0 {
-                    format!("{tool} found {issue_count} issue(s) in {kind_dir}/{folder_name}/")
-                } else {
-                    // Exit code non-zero but couldn't parse issues
-                    let code = lint_result
-                        .exit_code
-                        .map(|c| format!(" (exit code {c})"))
-                        .unwrap_or_default();
-                    format!("{tool} failed{code} in {kind_dir}/{folder_name}/")
-                };
+            if let Some(tool) = linter_tool {
+                if let Some(fr) =
+                    check_service_linter(&ctx, &service_dir, tool, js.as_ref(), &rel, &location)
+                {
+                    results.push(fr);
+                }
+            }
 
-                let hint = if lint_result.issues.is_empty() {
-                    // Show first few lines of stderr as hint
-                    let preview: String = lint_result
-                        .stderr
-                        .lines()
-                        .take(5)
-                        .collect::<Vec<_>>()
-                        .join("\n        ");
-                    if preview.is_empty() {
-                        None
-                    } else {
-                        Some(preview)
-                    }
-                } else {
-                    let max_show = 10;
-                    let mut hint_lines: Vec<String> = lint_result
-                        .issues
-                        .iter()
-                        .take(max_show)
-                        .map(|i| i.to_hint_line())
-                        .collect();
-                    if issue_count > max_show {
-                        hint_lines.push(format!("... and {} more", issue_count - max_show));
-                    }
-                    Some(hint_lines.join("\n        "))
-                };
-
-                results.push(FileResult {
-                    path: rel,
-                    diagnostics: vec![Diagnostic {
-                        severity: Severity::Error,
-                        code: "SV007".into(),
-                        message: label,
-                        location: format!("{kind_dir}/{folder_name}/"),
-                        hint,
-                    }],
-                });
+            if let Some(framework) = test_framework {
+                if let Some(fr) =
+                    check_service_tests(&ctx, &service_dir, framework, js.as_ref(), &rel, &location)
+                {
+                    results.push(fr);
+                }
             }
         }
     }
@@ -562,11 +537,199 @@ pub fn validate_service_linters(dir: &Path) -> Vec<FileResult> {
     results
 }
 
-/// Run detected test suites for services/apps/infra and produce SV009/SV010 diagnostics.
-pub fn validate_service_tests(dir: &Path) -> Vec<FileResult> {
-    let mut results = Vec::new();
-    let dirs = ["services", "apps", "infra"];
+/// Ensure JS deps are installed; return an SV014 diagnostic when they are
+/// missing and could not be installed.
+fn ensure_js_deps_diagnostic(
+    ctx: &mut crate::toolchain::ToolchainContext,
+    js: &crate::toolchain::JsToolchain,
+    location: &str,
+) -> Option<Diagnostic> {
+    use crate::toolchain::InstallOutcome;
 
+    let pm = js.pm.name();
+    let (install_prog, install_args) = js.pm.install_command(js.has_lockfile);
+    let install_cmd = std::iter::once(install_prog)
+        .chain(install_args.iter().copied())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let root = js.workspace_root.display();
+
+    let hint = match ctx.ensure_js_deps(js) {
+        InstallOutcome::AlreadyInstalled | InstallOutcome::Installed => return None,
+        InstallOutcome::SkippedNoInstall => {
+            format!("node_modules missing in {root}; rerun without --no-install or run `{install_cmd}` there")
+        }
+        InstallOutcome::SkippedNoPm { pm_binary } => {
+            let mut hint = format!(
+                "`{pm_binary}` is not on PATH; install it (e.g. via corepack) and run `{install_cmd}` in {root}"
+            );
+            if let Some(env_hint) = ctx.env_hint() {
+                hint.push_str("\n        ");
+                hint.push_str(&env_hint);
+            }
+            hint
+        }
+        InstallOutcome::Failed {
+            exit_code,
+            output_tail,
+        } => {
+            let code = exit_code
+                .map(|c| format!(" (exit code {c})"))
+                .unwrap_or_default();
+            format!("`{install_cmd}` failed{code} in {root}:\n        {output_tail}")
+        }
+    };
+
+    Some(Diagnostic {
+        severity: Severity::Warning,
+        code: "SV014".into(),
+        message: format!("dependencies not installed for {location} ({pm})"),
+        location: location.to_string(),
+        hint: Some(hint),
+    })
+}
+
+/// Run the detected linter and produce SV006/SV007 diagnostics.
+fn check_service_linter(
+    ctx: &crate::toolchain::ToolchainContext,
+    service_dir: &Path,
+    tool: &str,
+    js: Option<&crate::toolchain::JsToolchain>,
+    rel: &str,
+    location: &str,
+) -> Option<FileResult> {
+    let mut cmd = crate::service::resolve_lint_command(tool, js)?;
+    let (program, args) = ctx.finalize(&cmd.program, cmd.args.clone());
+    cmd.program = program;
+    cmd.args = args;
+
+    let lint_result = crate::service::run_linter(service_dir, &cmd);
+
+    if lint_result.command_not_found {
+        let mut hint = format!("install {tool} or set has_linter: false in frontmatter");
+        if let Some(env_hint) = ctx.env_hint() {
+            hint.push_str("\n        ");
+            hint.push_str(&env_hint);
+        }
+        return Some(FileResult {
+            path: rel.to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Warning,
+                code: "SV006".into(),
+                message: format!("linter \"{tool}\" detected but not installed"),
+                location: location.to_string(),
+                hint: Some(hint),
+            }],
+        });
+    }
+
+    if lint_result.success {
+        return None;
+    }
+
+    let issue_count = lint_result.issues.len();
+    let label = if issue_count > 0 {
+        format!("{tool} found {issue_count} issue(s) in {location}")
+    } else {
+        // Exit code non-zero but couldn't parse issues
+        let code = lint_result
+            .exit_code
+            .map(|c| format!(" (exit code {c})"))
+            .unwrap_or_default();
+        format!("{tool} failed{code} in {location}")
+    };
+
+    let hint = if lint_result.issues.is_empty() {
+        crate::toolchain::output_preview(&lint_result.stdout, &lint_result.stderr, 10)
+    } else {
+        let max_show = 10;
+        let mut hint_lines: Vec<String> = lint_result
+            .issues
+            .iter()
+            .take(max_show)
+            .map(|i| i.to_hint_line())
+            .collect();
+        if issue_count > max_show {
+            hint_lines.push(format!("... and {} more", issue_count - max_show));
+        }
+        Some(hint_lines.join("\n        "))
+    };
+
+    Some(FileResult {
+        path: rel.to_string(),
+        diagnostics: vec![Diagnostic {
+            severity: Severity::Error,
+            code: "SV007".into(),
+            message: label,
+            location: location.to_string(),
+            hint,
+        }],
+    })
+}
+
+/// Run the detected test suite and produce SV009/SV010 diagnostics.
+fn check_service_tests(
+    ctx: &crate::toolchain::ToolchainContext,
+    service_dir: &Path,
+    framework: &str,
+    js: Option<&crate::toolchain::JsToolchain>,
+    rel: &str,
+    location: &str,
+) -> Option<FileResult> {
+    let mut cmd = crate::service::resolve_test_command(framework, js)?;
+    let (program, args) = ctx.finalize(&cmd.program, cmd.args.clone());
+    cmd.program = program;
+    cmd.args = args;
+
+    let test_result = crate::service::run_tests(service_dir, &cmd);
+
+    if test_result.command_not_found {
+        let mut hint = format!("install {framework} or set has_tests: false in frontmatter");
+        if let Some(env_hint) = ctx.env_hint() {
+            hint.push_str("\n        ");
+            hint.push_str(&env_hint);
+        }
+        return Some(FileResult {
+            path: rel.to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Warning,
+                code: "SV009".into(),
+                message: format!("test runner \"{framework}\" detected but not installed"),
+                location: location.to_string(),
+                hint: Some(hint),
+            }],
+        });
+    }
+
+    if test_result.success {
+        return None;
+    }
+
+    let code = test_result
+        .exit_code
+        .map(|c| format!(" (exit code {c})"))
+        .unwrap_or_default();
+    // Test runners like vitest print failures at the end of stdout, so show
+    // the output tail (stderr appended when present).
+    let hint = crate::toolchain::output_preview(&test_result.stdout, &test_result.stderr, 12);
+
+    Some(FileResult {
+        path: rel.to_string(),
+        diagnostics: vec![Diagnostic {
+            severity: Severity::Error,
+            code: "SV010".into(),
+            message: format!("{framework} failed{code} in {location}"),
+            location: location.to_string(),
+            hint,
+        }],
+    })
+}
+
+/// SV015: a Phoenix test config that binds a hardcoded port with
+/// `server: true` (the Wallaby setup) collides with parallel test runs or a
+/// stale process (`:eaddrinuse`). Suggest an OS-assigned port instead.
+pub(crate) fn validate_hardcoded_test_ports(dir: &Path, file_results: &mut Vec<FileResult>) {
+    let dirs = ["services", "apps", "infra"];
     for kind_dir in &dirs {
         let target = dir.join(kind_dir);
         let entries = match std::fs::read_dir(&target) {
@@ -578,99 +741,84 @@ pub fn validate_service_tests(dir: &Path) -> Vec<FileResult> {
             if !service_dir.is_dir() {
                 continue;
             }
+            let config_path = service_dir.join("config").join("test.exs");
+            let content = match std::fs::read_to_string(&config_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            // Strip full-line comments so commented-out examples don't trigger.
+            let code: String = content
+                .lines()
+                .filter(|l| !l.trim_start().starts_with('#'))
+                .collect::<Vec<_>>()
+                .join("\n");
 
-            let readme = service_dir.join("README.md");
+            // Only a config with `server: true` actually binds the port
+            // during `mix test`.
+            if !code.contains("server: true") {
+                continue;
+            }
+            let port = match hardcoded_listener_port(&code) {
+                Some(p) => p,
+                None => continue,
+            };
+
             let folder_name = service_dir
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
-            let rel = format!("{kind_dir}/{folder_name}/README.md");
+            let rel = format!("{kind_dir}/{folder_name}/config/test.exs");
 
-            let tech = crate::service::extract_tech_stack(&service_dir);
-            let fm = readme
-                .exists()
-                .then(|| crate::document::Document::from_file(&readme).ok())
-                .flatten();
-            let fm_ref = fm.as_ref().and_then(|d| d.frontmatter.as_ref());
-
-            let practices = crate::service::detect_engineering_practices(
-                &service_dir,
-                &tech.primary_language,
-                fm_ref,
-            );
-
-            if !practices.has_tests {
-                continue;
+            let uses_wallaby = code.contains(":wallaby") || code.contains("Wallaby");
+            let mut hint = "use `port: 0` so the OS assigns a free port and parallel test runs \
+                 never collide with :eaddrinuse; resolve the bound port at runtime \
+                 via `Endpoint.server_info(:http)` in test_helper.exs"
+                .to_string();
+            if uses_wallaby {
+                hint.push_str(
+                    "\n        then point Wallaby at it: \
+                     `Application.put_env(:wallaby, :base_url, \"http://localhost:#{port}\")` \
+                     instead of a hardcoded base_url",
+                );
             }
 
-            let framework = match &practices.test_framework {
-                Some(t) => t,
-                None => continue,
-            };
-
-            let cmd = match crate::service::resolve_test_command(framework) {
-                Some(c) => c,
-                None => continue,
-            };
-
-            let test_result = crate::service::run_tests(&service_dir, &cmd);
-
-            if test_result.command_not_found {
-                results.push(FileResult {
-                    path: rel.clone(),
-                    diagnostics: vec![Diagnostic {
-                        severity: Severity::Warning,
-                        code: "SV009".into(),
-                        message: format!("test runner \"{framework}\" detected but not installed"),
-                        location: format!("{kind_dir}/{folder_name}/"),
-                        hint: Some(format!(
-                            "install {framework} or set has_tests: false in frontmatter"
-                        )),
-                    }],
-                });
-                continue;
-            }
-
-            if !test_result.success {
-                let code = test_result
-                    .exit_code
-                    .map(|c| format!(" (exit code {c})"))
-                    .unwrap_or_default();
-
-                // Show first few lines of combined output as hint
-                let combined = if test_result.stderr.is_empty() {
-                    test_result.stdout.clone()
-                } else {
-                    test_result.stderr.clone()
-                };
-                let hint = {
-                    let preview: String = combined
-                        .lines()
-                        .take(10)
-                        .collect::<Vec<_>>()
-                        .join("\n        ");
-                    if preview.is_empty() {
-                        None
-                    } else {
-                        Some(preview)
-                    }
-                };
-
-                results.push(FileResult {
-                    path: rel,
-                    diagnostics: vec![Diagnostic {
-                        severity: Severity::Error,
-                        code: "SV010".into(),
-                        message: format!("{framework} failed{code} in {kind_dir}/{folder_name}/"),
-                        location: format!("{kind_dir}/{folder_name}/"),
-                        hint,
-                    }],
-                });
-            }
+            file_results.push(FileResult {
+                path: rel.clone(),
+                diagnostics: vec![Diagnostic {
+                    severity: Severity::Warning,
+                    code: "SV015".into(),
+                    message: format!(
+                        "test endpoint binds hardcoded port {port} (server: true) in {rel}"
+                    ),
+                    location: rel.clone(),
+                    hint: Some(hint),
+                }],
+            });
         }
     }
+}
 
-    results
+/// Find a literal non-zero port inside an `http:`/`https:` listener keyword
+/// list (e.g. `http: [ip: {127, 0, 0, 1}, port: 4002]`). Ports outside a
+/// listener list (like `url: [port: 443]`) don't bind and are ignored.
+fn hardcoded_listener_port(code: &str) -> Option<u32> {
+    for key in ["http: [", "https: ["] {
+        let mut rest = code;
+        while let Some(start) = rest.find(key) {
+            let after = &rest[start + key.len()..];
+            let list = &after[..after.find(']').unwrap_or(after.len())];
+            if let Some(pos) = list.find("port:") {
+                let value = list[pos + "port:".len()..].trim_start();
+                let digits: String = value.chars().take_while(|c| c.is_ascii_digit()).collect();
+                match digits.parse::<u32>() {
+                    Ok(0) | Err(_) => {}
+                    Ok(port) => return Some(port),
+                }
+            }
+            rest = after;
+        }
+    }
+    None
 }
 
 pub(crate) fn validate_service_readmes(dir: &Path, file_results: &mut Vec<FileResult>) {

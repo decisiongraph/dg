@@ -370,7 +370,12 @@ fn check_lint(root: &Path) -> Result<()> {
                 Some(t) => t,
                 None => continue,
             };
-            let cmd = match md_db::service::resolve_lint_command(tool) {
+            let is_js = matches!(
+                tech.primary_language.as_str(),
+                "JavaScript" | "TypeScript" | "Node.js"
+            );
+            let js = is_js.then(|| md_db::toolchain::detect_js_toolchain(&service_dir, root));
+            let cmd = match md_db::service::resolve_lint_command(tool, js.as_ref()) {
                 Some(c) => c,
                 None => continue,
             };

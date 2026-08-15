@@ -119,10 +119,19 @@ dg set OPP-001 --remove tags                      # Remove a field
 # Validate & lint
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes
+dg validate --no-install             # Don't auto-install JS deps before running tests/linters
 dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
 # GitHub-hosted projects: warns when detected package ecosystems (cargo, npm, mix,
 # docker, terraform, nix, ...) lack .github/dependabot.yml coverage (SV011/SV012),
 # and when devenv.lock has no scheduled `devenv update` workflow (SV013).
+# Service tests/linters run via the detected JS package manager (packageManager
+# field or lockfile: bun/pnpm/yarn/npm); missing node_modules are installed
+# automatically first (SV014 warns when that's not possible). Binaries missing
+# from PATH are run through devenv/mise/nix/direnv when a matching config
+# (devenv.nix, mise.toml, .tool-versions, flake.nix, .envrc) exists at the root.
+# Phoenix services whose config/test.exs binds a hardcoded port with
+# `server: true` (Wallaby setups) get SV015 suggesting `port: 0` + a runtime-
+# resolved base_url, so parallel test runs can't collide.
 dg suggest                           # Advisory improvement suggestions
 
 # Inspect schema

@@ -79,6 +79,9 @@ pub mod table;
 /// Document template generation from schema definitions.
 #[allow(missing_docs)]
 pub mod template;
+/// Toolchain detection: JS package managers, env wrappers, dependency installs.
+#[allow(missing_docs)]
+pub mod toolchain;
 /// User/team configuration (handles, teams, validation).
 #[allow(missing_docs)]
 pub mod users;

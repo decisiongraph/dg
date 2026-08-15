@@ -12,6 +12,10 @@ pub struct LintArgs {
     /// Glob pattern to filter files
     #[arg(long)]
     pub pattern: Option<String>,
+
+    /// Skip auto-installing JS dependencies before running tests/linters
+    #[arg(long)]
+    pub no_install: bool,
 }
 
 pub fn run(
@@ -28,10 +32,12 @@ pub fn run(
         .context("validation failed")?;
 
     // 1b. Run detected linters and test suites for services/apps/infra
-    let lint_results = validation::validate_service_linters(root);
-    result.file_results.extend(lint_results);
-    let test_results = validation::validate_service_tests(root);
-    result.file_results.extend(test_results);
+    let opts = validation::ServiceCheckOptions {
+        no_install: args.no_install,
+    };
+    result
+        .file_results
+        .extend(validation::validate_service_checks(root, &opts));
 
     if !result.is_ok() {
         has_errors = true;

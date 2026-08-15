@@ -1768,13 +1768,38 @@ impl LintIssue {
     }
 }
 
+/// Exec program + prefix args for JS tools based on the detected package
+/// manager, defaulting to `npx`.
+fn js_exec_prefix(
+    js: Option<&crate::toolchain::JsToolchain>,
+) -> (&'static str, &'static [&'static str]) {
+    match js {
+        Some(j) => j.pm.exec_prefix(),
+        None => ("npx", &[]),
+    }
+}
+
+fn with_prefix(prefix: &'static [&'static str], args: &[&'static str]) -> Vec<&'static str> {
+    prefix.iter().chain(args.iter()).copied().collect()
+}
+
 /// Map a detected linter tool name to the command needed to run it.
-pub fn resolve_lint_command(linter_tool: &str) -> Option<LintCommand> {
+/// For JS tools, `js` selects the package-manager exec form
+/// (`pnpm exec eslint`, `bunx eslint`, ...) instead of hardcoded `npx`.
+pub fn resolve_lint_command(
+    linter_tool: &str,
+    js: Option<&crate::toolchain::JsToolchain>,
+) -> Option<LintCommand> {
+    let (exec, exec_prefix) = js_exec_prefix(js);
     let (program, args, json_args) = match linter_tool {
-        "ESLint" => ("npx", vec!["eslint", "."], vec!["--format", "json"]),
+        "ESLint" => (
+            exec,
+            with_prefix(exec_prefix, &["eslint", "."]),
+            vec!["--format", "json"],
+        ),
         "Biome" => (
-            "npx",
-            vec!["biome", "check", "."],
+            exec,
+            with_prefix(exec_prefix, &["biome", "check", "."]),
             vec!["--reporter", "json"],
         ),
         "RuboCop" => ("bundle", vec!["exec", "rubocop"], vec!["--format", "json"]),
@@ -1798,6 +1823,9 @@ pub fn resolve_lint_command(linter_tool: &str) -> Option<LintCommand> {
     })
 }
 
+/// Timeout for running a service's linter or test suite.
+const CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// Run a linter in the given service directory.
 pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
     let mut command = Command::new(&cmd.program);
@@ -1806,7 +1834,7 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
     command.current_dir(service_dir);
     command.env("NO_COLOR", "1");
 
-    match command.output() {
+    match crate::toolchain::run_with_timeout(&mut command, CHECK_TIMEOUT) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => LintResult {
             success: true,
             exit_code: None,
@@ -1824,9 +1852,9 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
             issues: Vec::new(),
         },
         Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let exit_code = output.status.code();
+            let stdout = output.stdout;
+            let mut stderr = output.stderr;
+            let exit_code = output.exit_code;
             // Exit code 127 = command not found (shell convention, also used by
             // wrappers like `bundle exec` when the gem is missing)
             if exit_code == Some(127) {
@@ -1839,10 +1867,12 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
                     issues: Vec::new(),
                 };
             }
-            let success = output.status.success();
+            if output.timed_out {
+                stderr.push_str(&format!("\ntimed out after {}s", CHECK_TIMEOUT.as_secs()));
+            }
             let issues = parse_linter_output(&cmd.tool_name, &stdout);
             LintResult {
-                success,
+                success: output.success,
                 exit_code,
                 stdout,
                 stderr,
@@ -2006,11 +2036,17 @@ pub struct TestResult {
 }
 
 /// Map a detected test framework to the command needed to run it.
-pub fn resolve_test_command(test_framework: &str) -> Option<TestCommand> {
+/// For JS frameworks, `js` selects the package-manager exec form
+/// (`pnpm exec vitest run`, `bunx vitest run`, ...) instead of hardcoded `npx`.
+pub fn resolve_test_command(
+    test_framework: &str,
+    js: Option<&crate::toolchain::JsToolchain>,
+) -> Option<TestCommand> {
+    let (exec, exec_prefix) = js_exec_prefix(js);
     let (program, args) = match test_framework {
-        "Vitest" => ("npx", vec!["vitest", "run"]),
-        "Jest" => ("npx", vec!["jest", "--ci"]),
-        "Mocha" => ("npx", vec!["mocha"]),
+        "Vitest" => (exec, with_prefix(exec_prefix, &["vitest", "run"])),
+        "Jest" => (exec, with_prefix(exec_prefix, &["jest", "--ci"])),
+        "Mocha" => (exec, with_prefix(exec_prefix, &["mocha"])),
         "pytest" => ("pytest", vec![]),
         "RSpec" => ("bundle", vec!["exec", "rspec"]),
         "Minitest" => ("bundle", vec!["exec", "rake", "test"]),
@@ -2034,7 +2070,7 @@ pub fn run_tests(service_dir: &Path, cmd: &TestCommand) -> TestResult {
     command.env("NO_COLOR", "1");
     command.env("CI", "1");
 
-    match command.output() {
+    match crate::toolchain::run_with_timeout(&mut command, CHECK_TIMEOUT) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => TestResult {
             success: true,
             exit_code: None,
@@ -2050,9 +2086,9 @@ pub fn run_tests(service_dir: &Path, cmd: &TestCommand) -> TestResult {
             command_not_found: false,
         },
         Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let exit_code = output.status.code();
+            let stdout = output.stdout;
+            let mut stderr = output.stderr;
+            let exit_code = output.exit_code;
             if exit_code == Some(127) {
                 return TestResult {
                     success: true,
@@ -2062,8 +2098,11 @@ pub fn run_tests(service_dir: &Path, cmd: &TestCommand) -> TestResult {
                     command_not_found: true,
                 };
             }
+            if output.timed_out {
+                stderr.push_str(&format!("\ntimed out after {}s", CHECK_TIMEOUT.as_secs()));
+            }
             TestResult {
-                success: output.status.success(),
+                success: output.success,
                 exit_code,
                 stdout,
                 stderr,
@@ -2867,27 +2906,48 @@ mod tests {
 
     #[test]
     fn test_resolve_lint_command_known() {
-        let cmd = resolve_lint_command("RuboCop").unwrap();
+        let cmd = resolve_lint_command("RuboCop", None).unwrap();
         assert_eq!(cmd.program, "bundle");
         assert_eq!(cmd.args, vec!["exec", "rubocop"]);
         assert_eq!(cmd.json_args, vec!["--format", "json"]);
         assert_eq!(cmd.tool_name, "RuboCop");
 
-        let cmd = resolve_lint_command("ESLint").unwrap();
+        let cmd = resolve_lint_command("ESLint", None).unwrap();
         assert_eq!(cmd.program, "npx");
         assert_eq!(cmd.args, vec!["eslint", "."]);
 
-        let cmd = resolve_lint_command("Clippy").unwrap();
+        let cmd = resolve_lint_command("Clippy", None).unwrap();
         assert_eq!(cmd.program, "cargo");
 
-        let cmd = resolve_lint_command("Ruff").unwrap();
+        let cmd = resolve_lint_command("Ruff", None).unwrap();
         assert_eq!(cmd.program, "ruff");
     }
 
     #[test]
+    fn test_resolve_lint_command_uses_package_manager() {
+        let js = crate::toolchain::JsToolchain {
+            pm: crate::toolchain::PackageManager::Pnpm,
+            workspace_root: std::path::PathBuf::from("/proj"),
+            has_lockfile: true,
+        };
+        let cmd = resolve_lint_command("ESLint", Some(&js)).unwrap();
+        assert_eq!(cmd.program, "pnpm");
+        assert_eq!(cmd.args, vec!["exec", "eslint", "."]);
+
+        let js = crate::toolchain::JsToolchain {
+            pm: crate::toolchain::PackageManager::Bun,
+            workspace_root: std::path::PathBuf::from("/proj"),
+            has_lockfile: true,
+        };
+        let cmd = resolve_test_command("Vitest", Some(&js)).unwrap();
+        assert_eq!(cmd.program, "bunx");
+        assert_eq!(cmd.args, vec!["vitest", "run"]);
+    }
+
+    #[test]
     fn test_resolve_lint_command_unknown() {
-        assert!(resolve_lint_command("UnknownLinter").is_none());
-        assert!(resolve_lint_command("").is_none());
+        assert!(resolve_lint_command("UnknownLinter", None).is_none());
+        assert!(resolve_lint_command("", None).is_none());
     }
 
     #[test]

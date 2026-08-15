@@ -3,7 +3,7 @@ pub(crate) mod directory;
 pub mod document;
 mod types;
 
-pub use directory::{validate_directory, validate_service_linters, validate_service_tests};
+pub use directory::{validate_directory, validate_service_checks, ServiceCheckOptions};
 pub use document::{error_diagnostic, infer_type_from_path, validate_document, validate_singleton};
 pub use types::{Diagnostic, FileResult, Severity, ValidationResult};
 
@@ -19,8 +19,8 @@ use crate::users::OrgConfig;
 pub(crate) use content::{check_broken_tables, check_image_paths};
 #[cfg(test)]
 pub(crate) use directory::{
-    dependabot_diagnostics, validate_license_file, validate_service_readmes,
-    validate_singleton_presence,
+    dependabot_diagnostics, validate_hardcoded_test_ports, validate_license_file,
+    validate_service_readmes, validate_singleton_presence,
 };
 #[cfg(test)]
 pub(crate) use document::singleton_matches;
@@ -1570,6 +1570,95 @@ type "service-readme" folder="services" singleton=#true {
         assert!(
             !codes(&results).contains(&"SV013".to_string()),
             "existing nix update workflow should suppress SV013: {results:?}"
+        );
+    }
+
+    fn write_test_exs(dir: &Path, service: &str, content: &str) {
+        let config = dir.join(service).join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(config.join("test.exs"), content).unwrap();
+    }
+
+    #[test]
+    fn test_hardcoded_test_port_sv015() {
+        let dir = tempfile::tempdir().unwrap();
+        write_test_exs(
+            dir.path(),
+            "services/care",
+            r#"import Config
+config :care, CareWeb.Endpoint,
+  http: [ip: {127, 0, 0, 1}, port: 4002],
+  server: true
+
+config :wallaby,
+  base_url: "http://localhost:4002"
+"#,
+        );
+
+        let mut results = Vec::new();
+        validate_hardcoded_test_ports(dir.path(), &mut results);
+        assert!(
+            codes(&results).contains(&"SV015".to_string()),
+            "hardcoded bound port should trigger SV015: {results:?}"
+        );
+        let diag = &results[0].diagnostics[0];
+        assert!(diag.message.contains("4002"), "{}", diag.message);
+        let hint = diag.hint.as_deref().unwrap();
+        assert!(hint.contains("port: 0"), "{hint}");
+        assert!(hint.contains("Wallaby"), "wallaby hint expected: {hint}");
+    }
+
+    #[test]
+    fn test_port_zero_no_sv015() {
+        let dir = tempfile::tempdir().unwrap();
+        write_test_exs(
+            dir.path(),
+            "services/care",
+            "config :care, CareWeb.Endpoint,\n  http: [ip: {127, 0, 0, 1}, port: 0],\n  server: true\n",
+        );
+
+        let mut results = Vec::new();
+        validate_hardcoded_test_ports(dir.path(), &mut results);
+        assert!(results.is_empty(), "port: 0 should not warn: {results:?}");
+    }
+
+    #[test]
+    fn test_no_server_true_no_sv015() {
+        // Phoenix default: server: false in test — the port never binds.
+        let dir = tempfile::tempdir().unwrap();
+        write_test_exs(
+            dir.path(),
+            "apps/web",
+            "config :web, WebWeb.Endpoint,\n  http: [ip: {127, 0, 0, 1}, port: 4002],\n  server: false\n",
+        );
+
+        let mut results = Vec::new();
+        validate_hardcoded_test_ports(dir.path(), &mut results);
+        assert!(
+            results.is_empty(),
+            "server: false should not warn: {results:?}"
+        );
+    }
+
+    #[test]
+    fn test_url_port_and_comments_no_sv015() {
+        let dir = tempfile::tempdir().unwrap();
+        // `url:` ports don't bind, and commented-out listeners don't count.
+        write_test_exs(
+            dir.path(),
+            "services/care",
+            r#"config :care, CareWeb.Endpoint,
+  url: [host: "example.com", port: 443],
+  # http: [ip: {127, 0, 0, 1}, port: 4002],
+  server: true
+"#,
+        );
+
+        let mut results = Vec::new();
+        validate_hardcoded_test_ports(dir.path(), &mut results);
+        assert!(
+            results.is_empty(),
+            "url port / commented listener should not warn: {results:?}"
         );
     }
 }

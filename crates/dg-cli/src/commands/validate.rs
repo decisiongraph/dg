@@ -22,6 +22,10 @@ pub struct ValidateArgs {
     /// Diagnostic codes to skip (comma-separated, e.g. --skip U012,F020)
     #[arg(long, value_delimiter = ',')]
     pub skip: Vec<String>,
+
+    /// Skip auto-installing JS dependencies before running tests/linters
+    #[arg(long)]
+    pub no_install: bool,
 }
 
 pub fn run(
@@ -43,10 +47,12 @@ pub fn run(
 
     // Run detected linters and test suites only when not filtering by pattern or doc ID
     if args.pattern.is_none() && args.doc_id.is_none() {
-        let lint_results = validation::validate_service_linters(root);
-        result.file_results.extend(lint_results);
-        let test_results = validation::validate_service_tests(root);
-        result.file_results.extend(test_results);
+        let opts = validation::ServiceCheckOptions {
+            no_install: args.no_install,
+        };
+        result
+            .file_results
+            .extend(validation::validate_service_checks(root, &opts));
     }
 
     // Filter out skipped diagnostic codes
