@@ -45,7 +45,6 @@ fn ecosystem_for_file(name: &str) -> Option<&'static str> {
         "docker-compose.yml" | "docker-compose.yaml" | "compose.yml" | "compose.yaml" => {
             Some("docker-compose")
         }
-        ".terraform.lock.hcl" => Some("terraform"),
         "flake.nix" | "flake.lock" => Some("nix"),
         "devcontainer.json" => Some("devcontainers"),
         "Package.swift" => Some("swift"),
@@ -80,7 +79,11 @@ fn to_dependabot_dir(rel: &Path) -> String {
 /// sorted by directory then ecosystem. Respects `.gitignore`.
 pub fn detect_ecosystems(root: &Path) -> Vec<EcosystemHit> {
     let mut hits: BTreeSet<EcosystemHit> = BTreeSet::new();
+    // Terraform/OpenTofu share file layout (.tf, .terraform.lock.hcl) but are
+    // separate Dependabot ecosystems — collect dirs first, decide after the walk.
+    let mut terraform_family_dirs: BTreeSet<String> = BTreeSet::new();
     let mut terraform_lock_dirs: BTreeSet<String> = BTreeSet::new();
+    let mut opentofu_dirs: BTreeSet<String> = BTreeSet::new();
 
     let walker = WalkBuilder::new(root)
         .hidden(false)
@@ -120,13 +123,38 @@ pub fn detect_ecosystems(root: &Path) -> Vec<EcosystemHit> {
             continue;
         }
 
+        if name == ".terraform.lock.hcl" {
+            let dir = to_dependabot_dir(rel);
+            // OpenTofu pins providers from its own registry in the lockfile
+            if std::fs::read_to_string(path)
+                .map(|s| s.contains("registry.opentofu.org"))
+                .unwrap_or(false)
+            {
+                opentofu_dirs.insert(dir.clone());
+            }
+            terraform_lock_dirs.insert(dir.clone());
+            terraform_family_dirs.insert(dir);
+            continue;
+        }
+        if name == ".opentofu-version" || name == ".tofu-version" {
+            opentofu_dirs.insert(to_dependabot_dir(rel));
+            continue;
+        }
+        if name.ends_with(".tofu") {
+            let dir = to_dependabot_dir(rel);
+            opentofu_dirs.insert(dir.clone());
+            terraform_family_dirs.insert(dir);
+            continue;
+        }
+
         let Some(ecosystem) = ecosystem_for_file(name) else {
             continue;
         };
 
         let mut directory = to_dependabot_dir(rel);
-        if name == ".terraform.lock.hcl" {
-            terraform_lock_dirs.insert(directory.clone());
+        if ecosystem == "terraform" {
+            terraform_family_dirs.insert(directory);
+            continue;
         }
         // Dependabot scans .devcontainer/ from the parent directory
         if ecosystem == "devcontainers" {
@@ -143,13 +171,24 @@ pub fn detect_ecosystems(root: &Path) -> Vec<EcosystemHit> {
         });
     }
 
-    let mut hits: Vec<EcosystemHit> = hits.into_iter().collect();
-
-    // Terraform: local modules without lockfiles are managed by their root module —
-    // when lockfiles exist, only report the directories that have one
+    // Terraform/OpenTofu: local modules without lockfiles are managed by their
+    // root module — when lockfiles exist, only report the directories that have one
     if !terraform_lock_dirs.is_empty() {
-        hits.retain(|h| h.ecosystem != "terraform" || terraform_lock_dirs.contains(&h.directory));
+        terraform_family_dirs.retain(|d| terraform_lock_dirs.contains(d));
     }
+    for dir in terraform_family_dirs {
+        // Directory naming ("infra/opentofu") counts as tofu evidence too
+        let is_tofu = opentofu_dirs.contains(&dir)
+            || dir
+                .split('/')
+                .any(|part| part == "opentofu" || part == "tofu");
+        hits.insert(EcosystemHit {
+            ecosystem: if is_tofu { "opentofu" } else { "terraform" }.into(),
+            directory: dir,
+        });
+    }
+
+    let mut hits: Vec<EcosystemHit> = hits.into_iter().collect();
 
     // Prefer uv over pip when uv.lock lives in the same directory
     let uv_dirs: BTreeSet<String> = hits
@@ -467,6 +506,82 @@ mod tests {
 
         let hits = detect_ecosystems(root);
         assert!(hits.iter().any(|h| h.ecosystem == "terraform"));
+    }
+
+    #[test]
+    fn test_opentofu_lockfile_registry_detected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, "infra/prod/main.tf", "");
+        write(
+            root,
+            "infra/prod/.terraform.lock.hcl",
+            "provider \"registry.opentofu.org/hashicorp/aws\" {\n  version = \"5.0.0\"\n}\n",
+        );
+
+        let hits = detect_ecosystems(root);
+        assert!(hits.contains(&EcosystemHit {
+            ecosystem: "opentofu".into(),
+            directory: "/infra/prod".into()
+        }));
+        assert!(!hits.iter().any(|h| h.ecosystem == "terraform"));
+    }
+
+    #[test]
+    fn test_opentofu_dir_name_detected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, "infra/opentofu/main.tf", "");
+
+        let hits = detect_ecosystems(root);
+        assert!(hits.contains(&EcosystemHit {
+            ecosystem: "opentofu".into(),
+            directory: "/infra/opentofu".into()
+        }));
+        assert!(!hits.iter().any(|h| h.ecosystem == "terraform"));
+    }
+
+    #[test]
+    fn test_tofu_extension_and_version_file_detected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, "infra/main.tofu", "");
+
+        let hits = detect_ecosystems(root);
+        assert!(hits.contains(&EcosystemHit {
+            ecosystem: "opentofu".into(),
+            directory: "/infra".into()
+        }));
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write(root2, "envs/dev/main.tf", "");
+        write(root2, "envs/dev/.opentofu-version", "1.8.0\n");
+
+        let hits2 = detect_ecosystems(root2);
+        assert!(hits2.contains(&EcosystemHit {
+            ecosystem: "opentofu".into(),
+            directory: "/envs/dev".into()
+        }));
+    }
+
+    #[test]
+    fn test_terraform_registry_stays_terraform() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, "infra/prod/main.tf", "");
+        write(
+            root,
+            "infra/prod/.terraform.lock.hcl",
+            "provider \"registry.terraform.io/hashicorp/aws\" {\n  version = \"5.0.0\"\n}\n",
+        );
+
+        let hits = detect_ecosystems(root);
+        assert!(hits.contains(&EcosystemHit {
+            ecosystem: "terraform".into(),
+            directory: "/infra/prod".into()
+        }));
+        assert!(!hits.iter().any(|h| h.ecosystem == "opentofu"));
     }
 
     #[test]

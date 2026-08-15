@@ -1287,14 +1287,53 @@ fn scan_tf_providers(dir: &Path, depth: usize, found: &mut Vec<String>) {
 }
 
 /// Detect Terraform/OpenTofu infra directories by scanning for .tf files.
-/// Reports OpenTofu when tofu-specific markers exist, Terraform otherwise.
+/// Reports OpenTofu when tofu-specific markers exist (version files, .tofu
+/// sources, lockfile providers from registry.opentofu.org, or the directory
+/// itself being named "opentofu"/"tofu"), Terraform otherwise.
 fn detect_terraform_language(service_dir: &Path) -> Option<String> {
     if !find_file_by_suffix(service_dir, &[".tf", ".tofu"], 4) {
         return None;
     }
-    let is_tofu = service_dir.join(".opentofu-version").exists()
-        || find_file_by_suffix(service_dir, &[".tofu"], 4);
+    let dir_named_tofu = service_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n == "opentofu" || n == "tofu");
+    let is_tofu = dir_named_tofu
+        || service_dir.join(".opentofu-version").exists()
+        || service_dir.join(".tofu-version").exists()
+        || find_file_by_suffix(service_dir, &[".tofu"], 4)
+        || lockfile_uses_opentofu_registry(service_dir, 4);
     Some(if is_tofu { "OpenTofu" } else { "Terraform" }.to_string())
+}
+
+/// True if any `.terraform.lock.hcl` under `dir` (bounded depth) pins providers
+/// from the OpenTofu registry. `tofu init` writes the same lockfile name as
+/// Terraform but resolves providers via registry.opentofu.org.
+fn lockfile_uses_opentofu_registry(dir: &Path, depth: usize) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let path = entry.path();
+        if path.is_dir() {
+            if depth > 0
+                && !name.starts_with('.')
+                && name != "node_modules"
+                && lockfile_uses_opentofu_registry(&path, depth - 1)
+            {
+                return true;
+            }
+        } else if name == ".terraform.lock.hcl"
+            && std::fs::read_to_string(&path)
+                .map(|s| s.contains("registry.opentofu.org"))
+                .unwrap_or(false)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Bounded recursive search for any file whose name ends with one of `suffixes`.
@@ -1492,32 +1531,45 @@ pub struct EngineeringPractices {
     pub test_framework: Option<String>,
 }
 
-/// Detect linter config in service_dir or its parent.
+/// Detect linter config in service_dir or its ancestors. Checks two levels up
+/// so a monorepo root config (services/<name> → services → root, e.g. a shared
+/// eslint.config.mjs) is found; the service's own config still wins because
+/// directories are checked nearest-first.
 pub fn detect_linter(service_dir: &Path, primary_lang: &str) -> (bool, Option<String>) {
     let dirs_to_check: Vec<&Path> = {
         let mut v = vec![service_dir];
-        if let Some(parent) = service_dir.parent() {
-            v.push(parent);
+        let mut cur = service_dir;
+        for _ in 0..2 {
+            match cur.parent() {
+                Some(p) if !p.as_os_str().is_empty() => {
+                    v.push(p);
+                    cur = p;
+                }
+                _ => break,
+            }
         }
         v
     };
 
     let checks: &[(&[&str], &str)] = match primary_lang {
-        "JavaScript" | "TypeScript" => &[(
-            &[
-                ".eslintrc",
-                ".eslintrc.js",
-                ".eslintrc.cjs",
-                ".eslintrc.json",
-                ".eslintrc.yml",
-                ".eslintrc.yaml",
-                "eslint.config.js",
-                "eslint.config.mjs",
-                "eslint.config.cjs",
-                "eslint.config.ts",
-            ],
-            "ESLint",
-        )],
+        "JavaScript" | "TypeScript" => &[
+            (
+                &[
+                    ".eslintrc",
+                    ".eslintrc.js",
+                    ".eslintrc.cjs",
+                    ".eslintrc.json",
+                    ".eslintrc.yml",
+                    ".eslintrc.yaml",
+                    "eslint.config.js",
+                    "eslint.config.mjs",
+                    "eslint.config.cjs",
+                    "eslint.config.ts",
+                ],
+                "ESLint",
+            ),
+            (&["biome.json", "biome.jsonc"] as &[&str], "Biome"),
+        ],
         "Python" => &[(&["ruff.toml", ".ruff.toml", ".flake8"] as &[&str], "Ruff")],
         "Ruby" => &[(&[".rubocop.yml"] as &[&str], "RuboCop")],
         "Rust" => &[(&["clippy.toml", ".clippy.toml"] as &[&str], "Clippy")],
@@ -1530,21 +1582,13 @@ pub fn detect_linter(service_dir: &Path, primary_lang: &str) -> (bool, Option<St
         _ => return (false, None),
     };
 
-    for (files, tool) in checks {
-        for dir in &dirs_to_check {
+    // Directory-major: the service's own config wins over ancestor configs
+    for dir in &dirs_to_check {
+        for (files, tool) in checks {
             for file in *files {
                 if dir.join(file).exists() {
                     return (true, Some(tool.to_string()));
                 }
-            }
-        }
-    }
-
-    // Check biome.json for JS/TS
-    if matches!(primary_lang, "JavaScript" | "TypeScript") {
-        for dir in &dirs_to_check {
-            if dir.join("biome.json").exists() || dir.join("biome.jsonc").exists() {
-                return (true, Some("Biome".to_string()));
             }
         }
     }
@@ -1739,7 +1783,20 @@ pub struct LintResult {
     pub stdout: String,
     pub stderr: String,
     pub command_not_found: bool,
+    /// The linter ran but its config matched/ignored every file (e.g. a repo-root
+    /// eslint config whose `ignores` excludes this service dir) — the service
+    /// effectively has no linter, which is not a lint failure.
+    pub no_lintable_files: bool,
     pub issues: Vec<LintIssue>,
+}
+
+/// ESLint exits non-zero with this message when its config ignores everything
+/// it was asked to lint.
+fn eslint_all_files_ignored(stdout: &str, stderr: &str) -> bool {
+    let matches = |s: &str| {
+        s.contains("all of the files matching the glob pattern") && s.contains("are ignored")
+    };
+    matches(stdout) || matches(stderr)
 }
 
 /// A single issue reported by a linter.
@@ -1841,6 +1898,7 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
             stdout: String::new(),
             stderr: String::new(),
             command_not_found: true,
+            no_lintable_files: false,
             issues: Vec::new(),
         },
         Err(_) => LintResult {
@@ -1849,6 +1907,7 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
             stdout: String::new(),
             stderr: String::new(),
             command_not_found: false,
+            no_lintable_files: false,
             issues: Vec::new(),
         },
         Ok(output) => {
@@ -1864,12 +1923,16 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
                     stdout,
                     stderr,
                     command_not_found: true,
+                    no_lintable_files: false,
                     issues: Vec::new(),
                 };
             }
             if output.timed_out {
                 stderr.push_str(&format!("\ntimed out after {}s", CHECK_TIMEOUT.as_secs()));
             }
+            let no_lintable_files = cmd.tool_name == "ESLint"
+                && !output.success
+                && eslint_all_files_ignored(&stdout, &stderr);
             let issues = parse_linter_output(&cmd.tool_name, &stdout);
             LintResult {
                 success: output.success,
@@ -1877,6 +1940,7 @@ pub fn run_linter(service_dir: &Path, cmd: &LintCommand) -> LintResult {
                 stdout,
                 stderr,
                 command_not_found: false,
+                no_lintable_files,
                 issues,
             }
         }
@@ -2550,6 +2614,49 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_opentofu_from_lockfile_and_dir_name() {
+        // Lockfile pinning registry.opentofu.org providers → OpenTofu
+        let tmp = std::env::temp_dir().join("dg_service_tofu_lock");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(tmp.join("main.tf"), "# tf\n").unwrap();
+        std::fs::write(
+            tmp.join(".terraform.lock.hcl"),
+            "provider \"registry.opentofu.org/hashicorp/aws\" {\n  version = \"5.0.0\"\n}\n",
+        )
+        .unwrap();
+        assert_eq!(detect_terraform_language(&tmp).as_deref(), Some("OpenTofu"));
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        // Directory named "opentofu" → OpenTofu even without other markers
+        let tmp = std::env::temp_dir().join("dg_service_tofu_dir");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("opentofu")).unwrap();
+        std::fs::write(tmp.join("opentofu/main.tf"), "# tf\n").unwrap();
+        assert_eq!(
+            detect_terraform_language(&tmp.join("opentofu")).as_deref(),
+            Some("OpenTofu")
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        // Terraform registry lockfile stays Terraform
+        let tmp = std::env::temp_dir().join("dg_service_tf_lock");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(tmp.join("main.tf"), "# tf\n").unwrap();
+        std::fs::write(
+            tmp.join(".terraform.lock.hcl"),
+            "provider \"registry.terraform.io/hashicorp/aws\" {\n  version = \"5.0.0\"\n}\n",
+        )
+        .unwrap();
+        assert_eq!(
+            detect_terraform_language(&tmp).as_deref(),
+            Some("Terraform")
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn test_frontmatter_language_override() {
         let tmp = std::env::temp_dir().join("dg_service_fm_lang");
         let _ = std::fs::remove_dir_all(&tmp);
@@ -2836,6 +2943,70 @@ mod tests {
         assert_eq!(tool.as_deref(), Some("ESLint"));
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_detect_linter_monorepo_root_fallback() {
+        // eslint.config.mjs at the repo root covers services/<name> two levels down
+        let tmp = std::env::temp_dir().join("dg_detect_linter_root");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let service = tmp.join("services").join("web");
+        std::fs::create_dir_all(&service).unwrap();
+        std::fs::write(tmp.join("eslint.config.mjs"), "export default [];\n").unwrap();
+
+        let (has, tool) = detect_linter(&service, "TypeScript");
+        assert!(
+            has,
+            "root eslint config should be detected from services/web"
+        );
+        assert_eq!(tool.as_deref(), Some("ESLint"));
+
+        // A service-level config wins over the root one
+        std::fs::write(service.join("biome.json"), "{}").unwrap();
+        let (has, tool) = detect_linter(&service, "TypeScript");
+        assert!(has);
+        assert_eq!(tool.as_deref(), Some("Biome"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_detect_linter_root_fallback_is_language_scoped() {
+        // A root eslint config must not count as a linter for non-JS services
+        let tmp = std::env::temp_dir().join("dg_detect_linter_lang_scope");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let service = tmp.join("services").join("api");
+        std::fs::create_dir_all(&service).unwrap();
+        std::fs::write(tmp.join("eslint.config.mjs"), "export default [];\n").unwrap();
+
+        for lang in ["Elixir", "Python", "Rust", "Ruby", "Go", "Terraform"] {
+            let (has, tool) = detect_linter(&service, lang);
+            assert!(
+                !has && tool.is_none(),
+                "root eslint config must not count for {lang} services"
+            );
+        }
+
+        // The language's own config at the root does count (e.g. .credo.exs)
+        std::fs::write(tmp.join(".credo.exs"), "%{}\n").unwrap();
+        let (has, tool) = detect_linter(&service, "Elixir");
+        assert!(has);
+        assert_eq!(tool.as_deref(), Some("Credo"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_eslint_all_files_ignored_detection() {
+        let stderr = "Oops! Something went wrong! :(\n\nESLint: 9.39.5\n\n\
+                      You are linting \".\", but all of the files matching the glob pattern \".\" are ignored.\n";
+        assert!(eslint_all_files_ignored("", stderr));
+        assert!(eslint_all_files_ignored(stderr, ""));
+        assert!(!eslint_all_files_ignored(
+            "",
+            "Parsing error: unexpected token"
+        ));
+        assert!(!eslint_all_files_ignored("", ""));
     }
 
     #[test]

@@ -29,6 +29,8 @@ pub enum HooksCommand {
         message_file: String,
         /// Source of the commit message (message, template, merge, squash, commit)
         source: Option<String>,
+        /// Commit SHA (passed by git for --amend / -c / -C, unused)
+        commit: Option<String>,
     },
     /// Git commit-msg hook: warn if staged doc changes aren't referenced
     CommitMsg {
@@ -49,6 +51,7 @@ pub fn run(args: &HooksArgs, root: &Path) -> Result<()> {
         HooksCommand::PrepareCommitMsg {
             message_file,
             source,
+            commit: _,
         } => prepare_commit_msg(message_file, source.as_deref()),
         HooksCommand::CommitMsg { message_file } => commit_msg(message_file),
         HooksCommand::DenyCommand => deny_command(),
@@ -138,8 +141,9 @@ fn extract_doc_ids(files: &[String]) -> Vec<String> {
 }
 
 fn prepare_commit_msg(message_file: &str, source: Option<&str>) -> Result<()> {
-    // Skip for merge/squash commits — git generates those messages
-    if matches!(source, Some("merge") | Some("squash")) {
+    // Skip for merge/squash commits (git generates those messages) and for
+    // amend/-c/-C (source "commit": the existing message already has its refs)
+    if matches!(source, Some("merge") | Some("squash") | Some("commit")) {
         return Ok(());
     }
 
@@ -382,7 +386,7 @@ fn check_lint(root: &Path) -> Result<()> {
 
             let result = md_db::service::run_linter(&service_dir, &cmd);
 
-            if result.command_not_found {
+            if result.command_not_found || result.no_lintable_files {
                 continue;
             }
 
@@ -588,6 +592,35 @@ mod tests {
     fn check_fixme_nonexistent_file_is_ok() {
         let tmp = tempfile::tempdir().unwrap();
         check_fixme(Some("docs/nonexistent.md"), tmp.path()).unwrap();
+    }
+
+    // ── prepare-commit-msg arg parsing ────────────────────────────────────────
+
+    #[test]
+    fn prepare_commit_msg_accepts_amend_args() {
+        use clap::Parser;
+        // git passes `<file> commit HEAD` for --amend / -c / -C
+        let cli = TestHooksCli::try_parse_from([
+            "hooks",
+            "prepare-commit-msg",
+            ".git/COMMIT_EDITMSG",
+            "commit",
+            "HEAD",
+        ])
+        .unwrap();
+        match cli.cmd {
+            HooksCommand::PrepareCommitMsg { source, commit, .. } => {
+                assert_eq!(source.as_deref(), Some("commit"));
+                assert_eq!(commit.as_deref(), Some("HEAD"));
+            }
+            _ => panic!("expected PrepareCommitMsg"),
+        }
+    }
+
+    #[test]
+    fn prepare_commit_msg_skips_amend_source() {
+        // source "commit" must early-return without touching the message file
+        prepare_commit_msg("/nonexistent/COMMIT_EDITMSG", Some("commit")).unwrap();
     }
 
     // ── extract_doc_ids unit tests ────────────────────────────────────────────

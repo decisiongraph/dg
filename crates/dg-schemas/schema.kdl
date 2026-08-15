@@ -203,7 +203,7 @@ type "service-readme" folder="services" singleton=#true description="Service REA
     section "Architecture" required=#true description="Service-level architecture diagram" {
         diagram required=#true
     }
-    section "Local Development" required=#true description="Setup, build, test, run instructions" {
+    section "Local Development" required=#true description="Setup, build, test, run instructions. All commands run from this service's own directory — never write 'from the repository root' followed by a cd into the service dir (devenv shell works from subdirectories)" {
         section "Setup" required=#true description="Environment setup" {
             content min-paragraphs=1
         }
@@ -222,7 +222,7 @@ type "service-readme" folder="services" singleton=#true description="Service REA
 type "app-readme" folder="apps" singleton=#true description="App README in monorepo" {
     match "README.md"
 
-    section "Local Development" required=#true description="Setup, build, test, run instructions" {
+    section "Local Development" required=#true description="Setup, build, test, run instructions. All commands run from this app's own directory — never write 'from the repository root' followed by a cd into the app dir (devenv shell works from subdirectories)" {
         section "Setup" required=#true description="Environment setup" {
             content min-paragraphs=1
         }

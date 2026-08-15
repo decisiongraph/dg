@@ -122,7 +122,9 @@ dg validate --skip C002              # Suppress specific diagnostic codes
 dg validate --no-install             # Don't auto-install JS deps before running tests/linters
 dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
 # GitHub-hosted projects: warns when detected package ecosystems (cargo, npm, mix,
-# docker, terraform, nix, ...) lack .github/dependabot.yml coverage (SV011/SV012),
+# docker, terraform, opentofu, nix, ...) lack .github/dependabot.yml coverage
+# (SV011/SV012) — OpenTofu is told apart from Terraform via .tofu files,
+# .opentofu-version, lockfile registry.opentofu.org providers, or dir name —
 # and when devenv.lock has no scheduled `devenv update` workflow (SV013).
 # Service tests/linters run via the detected JS package manager (packageManager
 # field or lockfile: bun/pnpm/yarn/npm); missing node_modules are installed
@@ -137,6 +139,11 @@ dg lint                              # Validate + graph health (orphans, cycles,
 # is attributable to the service's own test suite, not dg. ExUnit suites
 # dominated by sync tests (which run one at a time) get SV016 suggesting
 # `async: true` conversion for files that don't touch global state.
+# Service READMEs whose code blocks say "from the repository root" or `cd` back
+# into the service's own directory get SV017 — commands should assume the
+# service directory as cwd (devenv shell works from subdirectories). Linter
+# detection falls back to a monorepo-root config (e.g. eslint.config.mjs) when
+# the service has none; a service-level config still wins.
 dg suggest                           # Advisory improvement suggestions
 
 # Inspect schema

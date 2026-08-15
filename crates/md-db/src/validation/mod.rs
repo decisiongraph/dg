@@ -1408,6 +1408,80 @@ type "service-readme" folder="services" singleton=#true {
     }
 
     #[test]
+    fn sv017_repo_root_cd_boilerplate() {
+        let tmp = std::env::temp_dir().join("dg-test-sv017");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("services/api")).unwrap();
+        std::fs::write(
+            tmp.join("services/api/README.md"),
+            "---\nowner: alice\nstatus: live\nhas_linter: true\nhas_tests: true\n---\n# API\n\n\
+             ## Development\n\n```bash\n# from the repository root\ndevenv shell\n\
+             cd services/api\nmix deps.get\nmix test\n```\n",
+        )
+        .unwrap();
+
+        let mut results = Vec::new();
+        validate_service_readmes(&tmp, &mut results);
+        let sv017: Vec<_> = results
+            .iter()
+            .flat_map(|r| &r.diagnostics)
+            .filter(|d| d.code == "SV017")
+            .collect();
+        assert_eq!(sv017.len(), 1, "repo-root boilerplate should trigger SV017");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn sv017_cd_own_dir_without_comment() {
+        let tmp = std::env::temp_dir().join("dg-test-sv017-cd");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("apps/web")).unwrap();
+        std::fs::write(
+            tmp.join("apps/web/README.md"),
+            "---\nowner: alice\nstatus: live\nhas_linter: true\nhas_tests: true\n---\n# Web\n\n\
+             ```sh\ncd apps/web\nbun install\n```\n",
+        )
+        .unwrap();
+
+        let mut results = Vec::new();
+        validate_service_readmes(&tmp, &mut results);
+        let sv017: Vec<_> = results
+            .iter()
+            .flat_map(|r| &r.diagnostics)
+            .filter(|d| d.code == "SV017")
+            .collect();
+        assert_eq!(sv017.len(), 1, "cd into own dir should trigger SV017");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn sv017_clean_readme_passes() {
+        let tmp = std::env::temp_dir().join("dg-test-sv017-clean");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("services/api")).unwrap();
+        std::fs::write(
+            tmp.join("services/api/README.md"),
+            "---\nowner: alice\nstatus: live\nhas_linter: true\nhas_tests: true\n---\n# API\n\n\
+             ## Development\n\n```bash\ndevenv shell\nmix deps.get\nmix test\n```\n\n\
+             Prose mentioning the repository root outside code blocks is fine.\n",
+        )
+        .unwrap();
+
+        let mut results = Vec::new();
+        validate_service_readmes(&tmp, &mut results);
+        let sv017: Vec<_> = results
+            .iter()
+            .flat_map(|r| &r.diagnostics)
+            .filter(|d| d.code == "SV017")
+            .collect();
+        assert!(sv017.is_empty(), "clean README should not trigger SV017");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn sv005_no_tests() {
         let tmp = std::env::temp_dir().join("dg-test-sv005");
         let _ = std::fs::remove_dir_all(&tmp);

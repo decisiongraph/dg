@@ -757,7 +757,8 @@ fn check_service_linter(
         progress_start(location, "lint", &cmd.program, &cmd.args);
     }
     let lint_result = crate::service::run_linter(service_dir, &cmd);
-    let ok = lint_result.success && !lint_result.command_not_found;
+    let ok =
+        (lint_result.success || lint_result.no_lintable_files) && !lint_result.command_not_found;
     if progress {
         progress_done(location, "lint", tool, ok, started);
     }
@@ -793,6 +794,31 @@ fn check_service_linter(
 
     if lint_result.success {
         return (None, timing);
+    }
+
+    // The config that made us pick this tool (often a repo-root fallback)
+    // ignores every file here — the service has no effective linter, which is
+    // a coverage gap, not a lint failure.
+    if lint_result.no_lintable_files {
+        return (
+            Some(FileResult {
+                path: rel.to_string(),
+                diagnostics: vec![Diagnostic {
+                    severity: Severity::Warning,
+                    code: "SV004".into(),
+                    message: format!(
+                        "{tool} config ignores all files in {location} — no effective linter"
+                    ),
+                    location: location.to_string(),
+                    hint: Some(format!(
+                        "the nearest {tool} config (likely at the repo root) excludes this \
+                         directory; add a service-level linter config or set has_linter: false \
+                         in frontmatter"
+                    )),
+                }],
+            }),
+            timing,
+        );
     }
 
     let issue_count = lint_result.issues.len();
@@ -1225,6 +1251,9 @@ pub(crate) fn validate_service_readmes(dir: &Path, file_results: &mut Vec<FileRe
             // SV006: Architecture section must contain a mermaid or d2 diagram (≥5 lines)
             validate_architecture_diagram(&doc.body, &readme, kind_dir, folder_name, file_results);
 
+            // SV017: "from the repository root" + cd boilerplate in code blocks
+            validate_repo_root_cd_pattern(&doc.body, &readme, kind_dir, folder_name, file_results);
+
             // SV008: EOL version warnings (only when avatars/ureq feature is enabled)
             #[cfg(feature = "avatars")]
             {
@@ -1264,6 +1293,65 @@ pub(crate) fn validate_service_readmes(dir: &Path, file_results: &mut Vec<FileRe
                 }
             }
         }
+    }
+}
+
+/// SV017: service READMEs whose code blocks tell the reader to start "from the
+/// repository root" and `cd` back into the service's own directory. AI agents
+/// often hallucinate this boilerplate (`devenv shell` works directly from the
+/// service directory); commands in a service README should assume the service
+/// directory as cwd.
+fn validate_repo_root_cd_pattern(
+    body: &str,
+    readme_path: &Path,
+    kind_dir: &str,
+    folder_name: &str,
+    file_results: &mut Vec<FileResult>,
+) {
+    let rel = format!("{kind_dir}/{folder_name}/README.md");
+    let own_dir = format!("{kind_dir}/{folder_name}");
+
+    let mut in_block = false;
+    let mut offending: Option<String> = None;
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_block = !in_block;
+            continue;
+        }
+        if !in_block {
+            continue;
+        }
+        let lower = trimmed.to_lowercase();
+        let root_comment = trimmed.starts_with('#')
+            && (lower.contains("repository root") || lower.contains("repo root"));
+        let cd_own_dir = trimmed
+            .strip_prefix("cd ")
+            .map(|target| target.trim().trim_start_matches("./").trim_end_matches('/') == own_dir)
+            .unwrap_or(false);
+        if root_comment || cd_own_dir {
+            offending = Some(trimmed.to_string());
+            break;
+        }
+    }
+
+    if let Some(line) = offending {
+        file_results.push(FileResult {
+            path: readme_path.display().to_string(),
+            diagnostics: vec![Diagnostic {
+                severity: Severity::Warning,
+                code: "SV017".into(),
+                message: format!(
+                    "{rel} tells readers to run commands from the repository root (\"{line}\")"
+                ),
+                location: rel,
+                hint: Some(format!(
+                    "commands in a service README run from {own_dir}/ — drop the \
+                     \"from the repository root\" / `cd {own_dir}` boilerplate; \
+                     `devenv shell` and most tooling work directly from the service directory"
+                )),
+            }],
+        });
     }
 }
 
