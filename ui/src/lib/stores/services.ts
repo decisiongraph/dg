@@ -25,6 +25,7 @@ export async function loadServices() {
 
 export const allServices = derived(servicesData, ($d) => $d?.services ?? []);
 export const deviconUrls = derived(servicesData, ($d) => $d?.devicon_urls ?? {});
+export const techInfo = derived(servicesData, ($d) => $d?.tech_info ?? {});
 
 /** Look up a service by slug. */
 export function serviceBySlug(services: ServiceEntry[], slug: string): ServiceEntry | undefined {

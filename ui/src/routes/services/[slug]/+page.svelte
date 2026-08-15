@@ -8,6 +8,7 @@
 	import SourceFileLink from '$lib/components/SourceFileLink.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import DeviconIcon from '$lib/components/DeviconIcon.svelte';
+	import TechPill from '$lib/components/TechPill.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { onMount } from 'svelte';
@@ -201,15 +202,7 @@
 										{@const version = service.framework_versions?.find(
 											(fv) => fv[0] === fw
 										)}
-										<span
-											class="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs"
-										>
-											<DeviconIcon name={fw} size="sm" />
-											{fw}
-											{#if version}
-												<span class="text-muted-foreground">{version[1]}</span>
-											{/if}
-										</span>
+										<TechPill name={fw} version={version?.[1]} class="px-2.5 py-1 text-xs" />
 									{/each}
 								</div>
 							{/if}

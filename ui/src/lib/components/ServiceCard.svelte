@@ -1,7 +1,7 @@
 <script lang="ts">
 	import StatusBadge from './StatusBadge.svelte';
 	import UserAvatar from './UserAvatar.svelte';
-	import DeviconIcon from './DeviconIcon.svelte';
+	import TechPill from './TechPill.svelte';
 	import { orgData } from '$lib/stores/org';
 	import type { ServiceEntry, SchemaEnumValue } from '$lib/types';
 
@@ -133,10 +133,7 @@
 	<!-- Technology pills: language, frameworks, infra, database — all in one row -->
 	<div class="mt-3 flex flex-wrap gap-1">
 		{#each pills as tech (tech)}
-			<span class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-				<DeviconIcon name={tech} size="sm" />
-				{tech === service.primary_language ? displayLang(tech) : tech}
-			</span>
+			<TechPill name={tech} label={tech === service.primary_language ? displayLang(tech) : tech} />
 		{/each}
 	</div>
 

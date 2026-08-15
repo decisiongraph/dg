@@ -217,6 +217,7 @@ pub struct AssignmentJson {
 pub struct ServicesJson {
     pub services: Vec<ServiceJson>,
     pub devicon_urls: BTreeMap<String, String>,
+    pub tech_info: BTreeMap<String, crate::devicons::TechInfo>,
 }
 
 #[derive(Serialize)]
@@ -1697,10 +1698,12 @@ pub fn build_services_json(project_dir: &Path, org: Option<&OrgConfig>) -> Servi
     }
 
     let devicon_urls = crate::devicons::build_cdn_url_map();
+    let tech_info = crate::devicons::build_tech_info_map();
 
     ServicesJson {
         services,
         devicon_urls,
+        tech_info,
     }
 }
 

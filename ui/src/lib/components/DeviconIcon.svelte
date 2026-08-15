@@ -9,8 +9,12 @@
 
 	let { name, size = 'sm' }: Props = $props();
 
-	const px = $derived(size === 'md' ? 24 : 16);
+	// Logos drawn in solid black — inverted in dark mode so they stay visible.
+	const MONOCHROME = new Set(['expo', 'vercel', 'express']);
+
+	const px = $derived(size === 'md' ? 19 : 13);
 	const url = $derived(deviconUrl($deviconUrls, name));
+	const invert = $derived(MONOCHROME.has(name.toLowerCase()));
 </script>
 
 {#if url}
@@ -19,7 +23,7 @@
 		alt={name}
 		width={px}
 		height={px}
-		class="inline-block shrink-0"
+		class="inline-block shrink-0 {invert ? 'dark:invert' : ''}"
 		style="width: {px}px; height: {px}px;"
 	/>
 {/if}

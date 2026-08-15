@@ -190,9 +190,15 @@ export interface ServiceEntry {
 	eol_warnings?: EolWarning[];
 }
 
+export interface TechInfo {
+	description: string;
+	url: string;
+}
+
 export interface ServicesData {
 	services: ServiceEntry[];
 	devicon_urls: Record<string, string>;
+	tech_info: Record<string, TechInfo>;
 }
 
 // ── Code references ─────────────────────────────────────────────────
