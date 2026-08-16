@@ -8,6 +8,10 @@ let
     set -eo pipefail
     ROOT="''${DEVENV_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
     cd "$ROOT"
+    # Claude Code may run outside the devenv shell: bootstrap PATH from the
+    # devenv profile so cargo/rustc/bun are found either way.
+    export PATH="$ROOT/.devenv/profile/bin:$PATH"
+    if command -v sccache >/dev/null; then export RUSTC_WRAPPER=sccache; fi
     D=$(mktemp -d)
     trap 'rm -rf "$D"' EXIT
 
@@ -165,7 +169,7 @@ in
       enable = true;
       name = "validate devenv.nix";
       entry = "${pkgs.writeShellScript "check-devenv" ''
-        ${pkgs.nix}/bin/nix eval --file devenv.nix --apply 'x: true' 2>&1 || {
+        ${pkgs.nix}/bin/nix --extra-experimental-features nix-command eval --file devenv.nix --apply 'x: true' 2>&1 || {
           echo "ERROR: devenv.nix failed to evaluate"
           exit 1
         }
@@ -304,6 +308,17 @@ in
 
   # Hooks
   claude.code.hooks = {
+    # Override devenv's default git-hooks-run hook ('cd "$DEVENV_ROOT" && prek run'),
+    # which breaks when Claude Code runs outside the devenv shell: DEVENV_ROOT is
+    # unset and prek is not on PATH. Resolve the root at runtime and bootstrap
+    # PATH from the devenv profile, same as the stop hook.
+    git-hooks-run = {
+      enable = true;
+      name = "Run git-hooks";
+      hookType = "PostToolUse";
+      matcher = "^(Edit|MultiEdit|Write)$";
+      command = "sh -c 'ROOT=\"\${DEVENV_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; export PATH=\"$ROOT/.devenv/profile/bin:$PATH\"; cd \"$ROOT\" && prek run'";
+    };
     stop = {
       enable = true;
       name = "Verify build, types, tests, and clean git";
