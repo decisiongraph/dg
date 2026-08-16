@@ -1,4 +1,5 @@
 mod commands;
+mod progress;
 
 use std::path::{Path, PathBuf};
 

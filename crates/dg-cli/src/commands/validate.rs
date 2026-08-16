@@ -43,8 +43,7 @@ pub fn run(
         args.pattern.clone()
     };
 
-    let progress = std::io::stderr().is_terminal();
-    if progress {
+    if std::io::stderr().is_terminal() {
         eprintln!("dg: validating markdown documents…");
     }
     let mut result = validation::validate_directory(root, schema, pattern.as_deref(), users)
@@ -55,7 +54,7 @@ pub fn run(
     if args.pattern.is_none() && args.doc_id.is_none() {
         let opts = validation::ServiceCheckOptions {
             no_install: args.no_install,
-            progress,
+            progress: crate::progress::stderr_sink(),
         };
         let outcome = validation::validate_service_checks(root, &opts);
         result.file_results.extend(outcome.file_results);

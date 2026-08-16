@@ -49,6 +49,9 @@ pub mod migrate;
 /// Output formatting helpers (field values, tables).
 #[allow(missing_docs)]
 pub mod output;
+/// Progress-event sink for long-running operations (service checks).
+#[allow(missing_docs)]
+pub mod progress;
 /// Chronological ID reordering for decision documents.
 #[allow(missing_docs)]
 pub mod renumber;

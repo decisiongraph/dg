@@ -438,12 +438,21 @@ pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResu
 }
 
 /// Options for running service linter/test checks.
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct ServiceCheckOptions {
     /// Skip auto-installing JS dependencies when node_modules is missing.
     pub no_install: bool,
-    /// Print progress lines to stderr while checks run.
-    pub progress: bool,
+    /// Receiver for progress events; `None` runs silently.
+    pub progress: Option<std::sync::Arc<dyn crate::progress::ProgressSink>>,
+}
+
+impl std::fmt::Debug for ServiceCheckOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServiceCheckOptions")
+            .field("no_install", &self.no_install)
+            .field("progress", &self.progress.is_some())
+            .finish()
+    }
 }
 
 /// Timing of one executed service check command, so callers can show that
@@ -496,15 +505,14 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Servic
     let mut runnable = Vec::new();
     for plan in plans {
         if let Some(js) = &plan.js {
-            if opts.progress
-                && !opts.no_install
-                && !crate::toolchain::js_deps_present(&js.workspace_root)
-            {
-                eprintln!(
-                    "dg: installing JS dependencies ({}) in {}",
-                    js.pm.name(),
-                    js.workspace_root.display()
-                );
+            if let Some(sink) = &opts.progress {
+                if !opts.no_install && !crate::toolchain::js_deps_present(&js.workspace_root) {
+                    sink.notice(&format!(
+                        "installing JS dependencies ({}) in {}",
+                        js.pm.name(),
+                        js.workspace_root.display()
+                    ));
+                }
             }
             if let Some(diag) = ensure_js_deps_diagnostic(&mut ctx, js, &plan.location) {
                 results.push(FileResult {
@@ -531,18 +539,15 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Servic
         .map(|p| p.linter_tool.is_some() as usize + p.test_framework.is_some() as usize)
         .sum();
     let jobs = default_check_jobs().min(runnable.len());
-    if opts.progress {
-        eprintln!(
-            "dg: running {check_count} check(s) across {} service(s), {jobs} service(s) in parallel",
-            runnable.len()
-        );
+    if let Some(sink) = &opts.progress {
+        sink.begin(check_count, runnable.len(), jobs);
     }
 
-    let progress = opts.progress;
+    let sink = opts.progress.as_deref();
     let run_all = || -> Vec<(Vec<FileResult>, Vec<CheckTiming>)> {
         runnable
             .par_iter()
-            .map(|plan| run_service_plan(&ctx, plan, progress))
+            .map(|plan| run_service_plan(&ctx, plan, sink))
             .collect()
     };
     // Dedicated pool so heavyweight test suites don't fan out to every core;
@@ -551,6 +556,10 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Servic
         Ok(pool) => pool.install(run_all),
         Err(_) => run_all(),
     };
+
+    if let Some(sink) = &opts.progress {
+        sink.end();
+    }
 
     let mut timings = Vec::new();
     for (frs, ts) in per_service {
@@ -651,17 +660,17 @@ fn default_check_jobs() -> usize {
 fn run_service_plan(
     ctx: &crate::toolchain::ToolchainContext,
     plan: &ServicePlan,
-    progress: bool,
+    sink: Option<&dyn crate::progress::ProgressSink>,
 ) -> (Vec<FileResult>, Vec<CheckTiming>) {
     let mut out = Vec::new();
     let mut timings = Vec::new();
     if let Some(tool) = plan.linter_tool.as_deref() {
-        let (fr, timing) = check_service_linter(ctx, plan, tool, progress);
+        let (fr, timing) = check_service_linter(ctx, plan, tool, sink);
         out.extend(fr);
         timings.extend(timing);
     }
     if let Some(framework) = plan.test_framework.as_deref() {
-        let (fr, timing) = check_service_tests(ctx, plan, framework, progress);
+        let (fr, timing) = check_service_tests(ctx, plan, framework, sink);
         out.extend(fr);
         timings.extend(timing);
     }
@@ -720,24 +729,12 @@ fn ensure_js_deps_diagnostic(
     })
 }
 
-/// Print a start line for a check ("dg: → services/care/ lint: mix credo").
-fn progress_start(location: &str, phase: &str, program: &str, args: &[String]) {
-    eprintln!("dg: → {location} {phase}: {program} {}", args.join(" "));
-}
-
-/// Print a finish line with elapsed time ("dg: ✓ services/care/ lint (Credo) 12.3s").
-fn progress_done(location: &str, phase: &str, tool: &str, ok: bool, started: std::time::Instant) {
-    let mark = if ok { "✓" } else { "✗" };
-    let secs = started.elapsed().as_secs_f32();
-    eprintln!("dg: {mark} {location} {phase} ({tool}) {secs:.1}s");
-}
-
 /// Run the detected linter and produce SV006/SV007 diagnostics.
 fn check_service_linter(
     ctx: &crate::toolchain::ToolchainContext,
     plan: &ServicePlan,
     tool: &str,
-    progress: bool,
+    sink: Option<&dyn crate::progress::ProgressSink>,
 ) -> (Option<FileResult>, Option<CheckTiming>) {
     let (service_dir, js, rel, location) = (
         plan.service_dir.as_path(),
@@ -753,14 +750,18 @@ fn check_service_linter(
     cmd.args = args;
 
     let started = std::time::Instant::now();
-    if progress {
-        progress_start(location, "lint", &cmd.program, &cmd.args);
+    if let Some(s) = sink {
+        s.check_started(
+            location,
+            "lint",
+            &format!("{} {}", cmd.program, cmd.args.join(" ")),
+        );
     }
     let lint_result = crate::service::run_linter(service_dir, &cmd);
     let ok =
         (lint_result.success || lint_result.no_lintable_files) && !lint_result.command_not_found;
-    if progress {
-        progress_done(location, "lint", tool, ok, started);
+    if let Some(s) = sink {
+        s.check_finished(location, "lint", tool, ok, started.elapsed().as_secs_f32());
     }
     let timing = (!lint_result.command_not_found).then(|| CheckTiming {
         location: location.to_string(),
@@ -870,7 +871,7 @@ fn check_service_tests(
     ctx: &crate::toolchain::ToolchainContext,
     plan: &ServicePlan,
     framework: &str,
-    progress: bool,
+    sink: Option<&dyn crate::progress::ProgressSink>,
 ) -> (Option<FileResult>, Option<CheckTiming>) {
     let (service_dir, js, rel, location) = (
         plan.service_dir.as_path(),
@@ -886,13 +887,23 @@ fn check_service_tests(
     cmd.args = args;
 
     let started = std::time::Instant::now();
-    if progress {
-        progress_start(location, "test", &cmd.program, &cmd.args);
+    if let Some(s) = sink {
+        s.check_started(
+            location,
+            "test",
+            &format!("{} {}", cmd.program, cmd.args.join(" ")),
+        );
     }
     let test_result = crate::service::run_tests(service_dir, &cmd);
     let ok = test_result.success && !test_result.command_not_found;
-    if progress {
-        progress_done(location, "test", framework, ok, started);
+    if let Some(s) = sink {
+        s.check_finished(
+            location,
+            "test",
+            framework,
+            ok,
+            started.elapsed().as_secs_f32(),
+        );
     }
     let timing = (!test_result.command_not_found).then(|| CheckTiming {
         location: location.to_string(),

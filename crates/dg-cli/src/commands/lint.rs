@@ -1,4 +1,3 @@
-use std::io::IsTerminal;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -35,7 +34,7 @@ pub fn run(
     // 1b. Run detected linters and test suites for services/apps/infra
     let opts = validation::ServiceCheckOptions {
         no_install: args.no_install,
-        progress: std::io::stderr().is_terminal(),
+        progress: crate::progress::stderr_sink(),
     };
     let outcome = validation::validate_service_checks(root, &opts);
     result.file_results.extend(outcome.file_results);
