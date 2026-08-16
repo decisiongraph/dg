@@ -31,7 +31,7 @@ pub fn validate_directory(
 
     let mut known_ids: HashSet<String> = HashSet::new();
     for path in &files {
-        known_ids.insert(crate::graph::path_to_id(path));
+        known_ids.insert(crate::graph::path_to_id_with_schema(path, schema));
     }
 
     // Validate files in parallel — all shared state is read-only

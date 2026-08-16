@@ -273,11 +273,14 @@ fn strip_undefined_keys(
 }
 
 fn infer_type_from_folder(path: &Path, schema: &Schema) -> Option<String> {
-    let path_str = path.to_string_lossy();
+    let parent = path.parent()?;
     for type_def in &schema.types {
+        // Singletons resolve via their `match` pattern, checked before this.
+        if type_def.singleton {
+            continue;
+        }
         if let Some(ref folder) = type_def.folder {
-            // Check if the file path contains the type's folder
-            if path_str.contains(folder.as_str()) {
+            if parent.ends_with(folder.as_str()) {
                 return Some(type_def.name.clone());
             }
         }

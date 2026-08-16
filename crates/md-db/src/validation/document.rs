@@ -205,7 +205,12 @@ pub fn validate_document(
 
     // Validate diagram code blocks by attempting to render them
     #[cfg(feature = "diagrams")]
-    validate_all_diagrams(&parsed, &mut diagnostics);
+    {
+        let allow_cycles = fm
+            .get_display("allow_diagram_cycles")
+            .is_some_and(|v| v == "true");
+        validate_all_diagrams(&parsed, allow_cycles, &mut diagnostics);
+    }
 
     // Validate gherkin code blocks
     #[cfg(feature = "gherkin")]
@@ -471,8 +476,10 @@ fn check_undefined_keys(
     schema: &Schema,
     diags: &mut Vec<Diagnostic>,
 ) {
-    // No built-in keys — type is inferred from doc number, title from H1
-    const BUILTINS: &[&str] = &[];
+    // `type` is read by the type resolver itself (see validate_document) and
+    // `allow_diagram_cycles` suppresses D002, so neither may be flagged as
+    // unknown. Everything else is schema-defined.
+    const BUILTINS: &[&str] = &["type", "allow_diagram_cycles"];
 
     for key in fm.keys() {
         // Check type-specific fields
@@ -1371,11 +1378,26 @@ const DIAGRAM_LANGUAGES: &[&str] = &["mermaid", "d2", "plantuml", "graphviz", "d
 /// Validate all diagram code blocks in the document by attempting to parse them.
 /// Reports parse errors as D001 and structural warnings (cycles) as D002.
 #[cfg(feature = "diagrams")]
-fn validate_all_diagrams(parsed: &ParsedBody, diags: &mut Vec<Diagnostic>) {
-    fn walk_sections(sections: &[crate::document::ParsedSection], diags: &mut Vec<Diagnostic>) {
+fn validate_all_diagrams(parsed: &ParsedBody, allow_cycles: bool, diags: &mut Vec<Diagnostic>) {
+    use crate::document::ParsedSection;
+
+    // A parent section's content byte-range includes its child sections, so a
+    // fenced diagram under a child heading appears in the parent's code_blocks
+    // too. Only the deepest owning section reports it.
+    fn child_owns_block(sections: &[ParsedSection], lang: &str, code: &str) -> bool {
+        sections.iter().any(|s| {
+            s.code_blocks.iter().any(|(l, c)| l == lang && c == code)
+                || child_owns_block(&s.children, lang, code)
+        })
+    }
+
+    fn walk_sections(sections: &[ParsedSection], allow_cycles: bool, diags: &mut Vec<Diagnostic>) {
         for section in sections {
             for (lang, code) in &section.code_blocks {
                 if !graphs_tui::is_supported(lang) {
+                    continue;
+                }
+                if child_owns_block(&section.children, lang, code) {
                     continue;
                 }
 
@@ -1384,18 +1406,39 @@ fn validate_all_diagrams(parsed: &ParsedBody, diags: &mut Vec<Diagnostic>) {
                 match graphs_tui::check(lang, code) {
                     Ok(warnings) => {
                         for warning in &warnings {
+                            if allow_cycles
+                                && matches!(
+                                    warning,
+                                    graphs_tui::DiagramWarning::CycleDetected { .. }
+                                )
+                            {
+                                continue;
+                            }
                             diags.push(Diagnostic {
                                 severity: Severity::Warning,
                                 code: "D002".into(),
                                 message: warning.to_string(),
                                 location: location.clone(),
-                                hint: None,
+                                hint: if matches!(
+                                    warning,
+                                    graphs_tui::DiagramWarning::CycleDetected { .. }
+                                ) {
+                                    Some(
+                                        "intentional loop? set 'allow_diagram_cycles: true' \
+                                         in frontmatter"
+                                            .into(),
+                                    )
+                                } else {
+                                    None
+                                },
                             });
                         }
                     }
                     Err(e) => {
+                        // Warning, not error: the diagram parser is incomplete
+                        // and must not block validation of valid diagrams.
                         diags.push(Diagnostic {
-                            severity: Severity::Error,
+                            severity: Severity::Warning,
                             code: "D001".into(),
                             message: format!("diagram parse error: {e}"),
                             location,
@@ -1406,11 +1449,11 @@ fn validate_all_diagrams(parsed: &ParsedBody, diags: &mut Vec<Diagnostic>) {
             }
 
             // Recurse into child sections
-            walk_sections(&section.children, diags);
+            walk_sections(&section.children, allow_cycles, diags);
         }
     }
 
-    walk_sections(&parsed.sections, diags);
+    walk_sections(&parsed.sections, allow_cycles, diags);
 }
 
 /// Gherkin code block languages.

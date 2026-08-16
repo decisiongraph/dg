@@ -112,7 +112,7 @@ impl DocGraph {
                     for target in refs {
                         edges.push(DocEdge {
                             from: id.clone(),
-                            to: target,
+                            to: ref_value_to_id(&target, path, schema),
                             relation: rel_name.to_string(),
                         });
                     }
@@ -124,13 +124,15 @@ impl DocGraph {
             let doc_dir = path.parent();
             for url in inline_links {
                 let target_id = if url.ends_with(".md") {
-                    // Relative .md path — resolve against doc directory
+                    // Relative .md path — resolve against doc directory.
+                    // Use the schema-aware variant so link targets mint the
+                    // same ID as the node they point at.
                     let link_path = if let Some(dir) = doc_dir {
                         dir.join(&url)
                     } else {
                         PathBuf::from(&url)
                     };
-                    path_to_id(&link_path)
+                    path_to_id_with_schema(&link_path, schema)
                 } else if schema.is_valid_id(&url) {
                     // String ID pattern like "ADR-001"
                     url.to_uppercase()
@@ -668,15 +670,31 @@ pub(crate) fn is_string_id_fallback(s: &str) -> bool {
     i > num_start && i == bytes.len()
 }
 
-/// Extract ref strings from a YAML value (single string or array of strings).
+/// Extract raw ref strings from a YAML value (single string or array of strings).
 pub(crate) fn extract_refs(val: &serde_yaml::Value) -> Vec<String> {
     match val {
-        serde_yaml::Value::String(s) => vec![s.to_uppercase()],
+        serde_yaml::Value::String(s) => vec![s.clone()],
         serde_yaml::Value::Sequence(seq) => seq
             .iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_uppercase()))
+            .filter_map(|v| v.as_str().map(str::to_string))
             .collect(),
         _ => vec![],
+    }
+}
+
+/// Convert a frontmatter relation value to a document ID. Bare IDs are
+/// uppercased ("adr-001" → "ADR-001"); `.md` paths ("adr-001.md",
+/// "./adr-001.md") are resolved against the document's directory, matching
+/// how inline body links are handled.
+pub(crate) fn ref_value_to_id(value: &str, doc_path: &Path, schema: &Schema) -> String {
+    if value.to_ascii_lowercase().ends_with(".md") {
+        let link_path = match doc_path.parent() {
+            Some(dir) => dir.join(value),
+            None => PathBuf::from(value),
+        };
+        path_to_id_with_schema(&link_path, schema)
+    } else {
+        value.to_uppercase()
     }
 }
 
@@ -1004,6 +1022,80 @@ mod tests {
             "healthy graph should have no diagnostics, got: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_ref_value_to_id() {
+        let schema = Schema::from_str(r#"type "adr" { field "title" type="string" }"#).unwrap();
+        let doc = Path::new("docs/adr-002.md");
+        assert_eq!(ref_value_to_id("ADR-001", doc, &schema), "ADR-001");
+        assert_eq!(ref_value_to_id("adr-001", doc, &schema), "ADR-001");
+        assert_eq!(ref_value_to_id("adr-001.md", doc, &schema), "ADR-001");
+        assert_eq!(ref_value_to_id("./adr-001.md", doc, &schema), "ADR-001");
+    }
+
+    #[test]
+    fn test_frontmatter_md_path_refs_resolve() {
+        // Frontmatter relation values in `.md` path form must resolve to node
+        // IDs the same way inline links do (issue #18 problem 5: G030).
+        let tmp = std::env::temp_dir().join("dg-test-fm-md-refs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("docs")).unwrap();
+        std::fs::write(tmp.join("docs/adr-001.md"), "---\ntitle: One\n---\n# One\n").unwrap();
+        std::fs::write(
+            tmp.join("docs/adr-002.md"),
+            "---\ntitle: Two\nsuperseded_by: adr-003.md\n---\n# Two\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.join("docs/adr-003.md"),
+            "---\ntitle: Three\nsupersedes: ./adr-002.md\nrelated:\n  - adr-001.md\n---\n# Three\n",
+        )
+        .unwrap();
+
+        let schema = Schema::from_str(
+            r#"
+relation "supersedes" inverse="superseded_by" cardinality="one"
+relation "related" cardinality="many"
+type "adr" folder="docs" {
+    field "title" type="string"
+}
+"#,
+        )
+        .unwrap();
+        let graph = DocGraph::build(&tmp, &schema).unwrap();
+
+        let targets = |from: &str| -> Vec<String> {
+            graph
+                .edges
+                .iter()
+                .filter(|e| e.from == from)
+                .map(|e| e.to.clone())
+                .collect()
+        };
+        assert!(
+            targets("ADR-002").contains(&"ADR-003".to_string()),
+            "bare .md ref should resolve, edges: {:?}",
+            graph.edges
+        );
+        assert!(
+            targets("ADR-003").contains(&"ADR-002".to_string()),
+            "./-prefixed .md ref should resolve, edges: {:?}",
+            graph.edges
+        );
+        assert!(
+            targets("ADR-003").contains(&"ADR-001".to_string()),
+            ".md ref in array should resolve, edges: {:?}",
+            graph.edges
+        );
+        // Every edge target must be a known node — no dangling G030 refs
+        assert!(
+            graph.edges.iter().all(|e| graph.nodes.contains_key(&e.to)),
+            "all .md refs must resolve to known nodes, edges: {:?}",
+            graph.edges
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

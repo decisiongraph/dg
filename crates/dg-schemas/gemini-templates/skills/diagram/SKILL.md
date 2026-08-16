@@ -76,7 +76,13 @@ Supported shapes that render distinctly:
 
 ### Cycles are warned
 
-A cycle like `A -> B -> C -> A` triggers a D002 warning. This is informational — cycles in incident/failure diagrams are often intentional. To avoid warnings on return paths, restructure as:
+A cycle like `A -> B -> C -> A` triggers a D002 warning. This is informational — cycles in incident/failure diagrams are often intentional. If the loop is deliberate (e.g. a retry loop), suppress the warning for the document by adding to frontmatter:
+
+```yaml
+allow_diagram_cycles: true
+```
+
+For simple return paths, you can also restructure as:
 
 ```d2
 # Instead of A -> B and B -> A, use:

@@ -266,9 +266,12 @@ impl Schema {
     }
 
     /// Look up a type definition by document ID (e.g. "ADR-001" → adr type).
+    /// Singleton types resolve via their `match` pattern only (see
+    /// `singleton_matches`): an ID-prefix match would type every README.md in
+    /// the tree as the root `readme` singleton.
     pub fn get_type_for_doc_id(&self, doc_id: &str) -> Option<&TypeDef> {
         let prefix = doc_id.split('-').next()?.to_lowercase();
-        self.get_type(&prefix)
+        self.get_type(&prefix).filter(|t| !t.singleton)
     }
 
     /// Get the canonical type name for a document ID (e.g. "ADR-001" → "adr").
@@ -431,6 +434,12 @@ fn parse_type_def(node: &KdlNode) -> Result<TypeDef> {
     if singleton && match_pattern.is_none() {
         return Err(Error::SchemaParse(format!(
             "singleton type '{name}' requires a match pattern"
+        )));
+    }
+    if !singleton && match_pattern.is_some() {
+        return Err(Error::SchemaParse(format!(
+            "type '{name}' has a match pattern but is not singleton=#true — \
+             match patterns only apply to singleton types"
         )));
     }
 
@@ -1561,6 +1570,44 @@ type "readme" singleton=#true {
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
         assert!(msg.contains("requires a match pattern"));
+    }
+
+    #[test]
+    fn test_match_requires_singleton() {
+        // A match pattern on a non-singleton type was silently dead config
+        // (issue #18 problem 2) — reject it at parse time instead.
+        let kdl = r#"
+type "guide" folder="docs" max_count=1 {
+    match "guide.md"
+}
+"#;
+        let result = Schema::from_str(kdl);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("not singleton"));
+    }
+
+    #[test]
+    fn test_singleton_not_resolved_by_id_prefix() {
+        // Singleton types resolve via `match` only; an ID-prefix hit would
+        // type every README.md in the tree as the root singleton.
+        let kdl = r#"
+type "adr" folder="docs/architecture" {
+    field "title" type="string"
+}
+type "readme" folder="." max_count=1 singleton=#true {
+    match "README.md"
+}
+"#;
+        let schema = Schema::from_str(kdl).unwrap();
+        assert!(schema.get_type_for_doc_id("README").is_none());
+        assert!(schema.get_type_for_doc_id("README-FOO").is_none());
+        assert_eq!(
+            schema
+                .get_type_for_doc_id("ADR-001")
+                .map(|t| t.name.as_str()),
+            Some("adr")
+        );
     }
 
     #[test]

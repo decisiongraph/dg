@@ -864,6 +864,13 @@ type "doc" {
             "expected D001 diagram parse error, got: {:?}",
             result.diagnostics
         );
+        // Warning, not error: the diagram parser is incomplete and must not
+        // block validation (issue #18 problem 3).
+        assert!(
+            d001s.iter().all(|d| d.severity == Severity::Warning),
+            "D001 must be a warning: {:?}",
+            d001s
+        );
     }
 
     #[test]
@@ -1736,6 +1743,130 @@ config :wallaby,
         assert!(
             results.is_empty(),
             "url port / commented listener should not warn: {results:?}"
+        );
+    }
+
+    #[test]
+    fn monorepo_extra_readmes_stay_untyped() {
+        // A nested README must not be typed as the root `readme` singleton via
+        // the ID-prefix fallback (issue #18 problem 1: unfixable T010/F011).
+        let tmp = std::env::temp_dir().join("dg-test-monorepo-readmes");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("crates/foo")).unwrap();
+        std::fs::write(tmp.join("README.md"), "# Root\n\nIntro.\n").unwrap();
+        std::fs::write(
+            tmp.join("crates/foo/README.md"),
+            "# Foo\n\nNo frontmatter.\n",
+        )
+        .unwrap();
+
+        let schema = Schema::from_str(
+            r#"
+type "readme" folder="." max_count=1 singleton=#true {
+    match "README.md"
+}
+"#,
+        )
+        .unwrap();
+        let result = validate_directory(&tmp, &schema, None, None).unwrap();
+
+        for code in ["T010", "F011", "F000", "F001"] {
+            assert!(
+                !result
+                    .file_results
+                    .iter()
+                    .any(|fr| fr.diagnostics.iter().any(|d| d.code == code)),
+                "nested README must not trigger {code}:\n{}",
+                result.to_report()
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn type_key_is_builtin_not_f020() {
+        let schema = Schema::from_str(
+            r#"
+type "doc" {
+    field "title" type="string"
+}
+"#,
+        )
+        .unwrap();
+        let doc = Document::from_str("---\ntype: doc\ntitle: T\n---\n\n# T\n").unwrap();
+        let result = validate_document(&doc, &schema, &HashSet::new(), &HashSet::new(), None);
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "F020" && d.location == "frontmatter.type"),
+            "the `type` key itself must not be F020: {:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "diagrams")]
+    fn nested_section_diagram_validated_once() {
+        // Parent section content includes child sections, so without dedup the
+        // same diagram is checked once per nesting level (issue #18 problem 4).
+        let d2 = "a: A\nb: B\nc: C\na -> b\nb -> c\nc -> a\n";
+        let md = format!(
+            "---\ntype: doc\ntitle: T\n---\n\n## Architecture\n\nIntro.\n\n### Retry flow\n\n```d2\n{d2}```\n"
+        );
+        let doc = Document::from_str(&md).unwrap();
+        let schema = Schema::from_str(
+            r#"
+type "doc" {
+    field "title" type="string"
+}
+"#,
+        )
+        .unwrap();
+        let result = validate_document(&doc, &schema, &HashSet::new(), &HashSet::new(), None);
+        let d002s: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == "D002")
+            .collect();
+        assert_eq!(
+            d002s.len(),
+            1,
+            "cycle in nested-section diagram must be reported exactly once: {:?}",
+            d002s
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "diagrams")]
+    fn allow_diagram_cycles_suppresses_d002() {
+        let d2 = "a: A\nb: B\nc: C\na -> b\nb -> c\nc -> a\n";
+        let md = format!(
+            "---\ntype: doc\ntitle: T\nallow_diagram_cycles: true\n---\n\n## Diagram\n\n```d2\n{d2}```\n"
+        );
+        let doc = Document::from_str(&md).unwrap();
+        let schema = Schema::from_str(
+            r#"
+type "doc" {
+    field "title" type="string"
+}
+"#,
+        )
+        .unwrap();
+        let result = validate_document(&doc, &schema, &HashSet::new(), &HashSet::new(), None);
+        assert!(
+            !result.diagnostics.iter().any(|d| d.code == "D002"),
+            "allow_diagram_cycles: true must suppress cycle warnings: {:?}",
+            result.diagnostics
+        );
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "F020" && d.location == "frontmatter.allow_diagram_cycles"),
+            "allow_diagram_cycles must not be F020: {:?}",
+            result.diagnostics
         );
     }
 }

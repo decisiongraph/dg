@@ -192,7 +192,10 @@ impl DocCache {
                 if let Some(val) = fm.get(rel_name) {
                     let refs = crate::graph::extract_refs(val);
                     for target in refs {
-                        edges.push((target, rel_name.to_string()));
+                        edges.push((
+                            crate::graph::ref_value_to_id(&target, path, schema),
+                            rel_name.to_string(),
+                        ));
                     }
                 }
             }
