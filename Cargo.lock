@@ -1193,7 +1193,7 @@ dependencies = [
 [[package]]
 name = "graphs-tui"
 version = "0.4.0"
-source = "git+https://github.com/decisiongraph/graphs-tui.git?branch=fix%2Fwinnow-compat-presult#9c9898b49d5603755be436d20fb29eeebd496220"
+source = "git+https://github.com/decisiongraph/graphs-tui.git?branch=main#8e353a714a1b8793dbb453844189df1b8c87531f"
 dependencies = [
  "unicode-width 0.2.2",
  "winnow 0.6.26",

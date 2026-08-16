@@ -27,7 +27,7 @@ debug = false
 strip = true
 
 [patch.crates-io]
-graphs-tui = { git = "https://github.com/decisiongraph/graphs-tui.git", branch = "fix/winnow-compat-presult" }
+graphs-tui = { git = "https://github.com/decisiongraph/graphs-tui.git", branch = "main" }
 
 [profile.release]
 lto = "thin"
