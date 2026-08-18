@@ -40,6 +40,17 @@ impl PackageManager {
         }
     }
 
+    /// True when this package manager's install executes dependency
+    /// lifecycle scripts by default (arbitrary code from the registry).
+    /// pnpm and bun block untrusted build/postinstall scripts by default,
+    /// so their installs are safe to run unattended.
+    pub fn runs_install_scripts(&self) -> bool {
+        matches!(
+            self,
+            PackageManager::Npm | PackageManager::Yarn | PackageManager::YarnBerry
+        )
+    }
+
     /// Program + prefix args for executing a locally-installed tool
     /// (e.g. `pnpm exec vitest run`, `bunx vitest run`).
     pub fn exec_prefix(&self) -> (&'static str, &'static [&'static str]) {
@@ -198,6 +209,33 @@ pub fn js_deps_present(workspace_root: &Path) -> bool {
         || workspace_root.join(".pnp.data.json").is_file()
 }
 
+/// True if an Elixir mix project's dependencies look fetched.
+pub fn mix_deps_present(service_dir: &Path) -> bool {
+    service_dir.join("deps").is_dir()
+}
+
+/// Package names with unresolved `allowBuilds:` entries in the workspace
+/// root's pnpm-workspace.yaml. pnpm scaffolds placeholder values ("set this
+/// to true or false") when an install hits ERR_PNPM_IGNORED_BUILDS; until a
+/// human decides (`pnpm approve-builds` or editing the file), build scripts
+/// stay skipped on every install.
+pub fn pnpm_unapproved_builds(workspace_root: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(workspace_root.join("pnpm-workspace.yaml")) else {
+        return Vec::new();
+    };
+    let Ok(yaml) = serde_yaml::from_str::<serde_yaml::Value>(&text) else {
+        return Vec::new();
+    };
+    let Some(allow) = yaml.get("allowBuilds").and_then(|v| v.as_mapping()) else {
+        return Vec::new();
+    };
+    allow
+        .iter()
+        .filter(|(_, v)| !v.is_bool())
+        .filter_map(|(k, _)| k.as_str().map(String::from))
+        .collect()
+}
+
 /// Dev-environment wrapper that can provide missing binaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnvWrapperKind {
@@ -278,7 +316,7 @@ fn detect_env_wrapper_with_path(
 }
 
 /// Check if an executable named `name` exists on the given PATH value.
-fn binary_on_path(name: &str, path: &OsStr) -> bool {
+pub(crate) fn binary_on_path(name: &str, path: &OsStr) -> bool {
     std::env::split_paths(path).any(|dir| {
         let candidate = dir.join(name);
         is_executable(&candidate)
@@ -304,8 +342,16 @@ fn is_executable(path: &Path) -> bool {
 pub enum InstallOutcome {
     AlreadyInstalled,
     Installed,
+    /// pnpm materialized node_modules but exited non-zero because dependency
+    /// build scripts are unapproved (ERR_PNPM_IGNORED_BUILDS with
+    /// strictDepBuilds on). Dependencies are usable; approval is a repo
+    /// hygiene concern surfaced separately.
+    InstalledIgnoredBuilds,
     /// `--no-install` was given and node_modules is missing.
     SkippedNoInstall,
+    /// Install would run dependency lifecycle scripts and no interactive
+    /// approval was available (or the user declined).
+    SkippedNeedsApproval,
     /// Package-manager binary not on PATH and no usable env wrapper.
     SkippedNoPm {
         pm_binary: &'static str,
@@ -318,14 +364,22 @@ pub enum InstallOutcome {
 
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// Interactive yes/no confirmation callback (message → approved?).
+pub type ConfirmFn = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 /// Per-validate-run toolchain state: env wrapper (detected once) and install
 /// outcomes cached per workspace root, so a monorepo installs only once.
 pub struct ToolchainContext {
     wrapper: Option<EnvWrapper>,
     env_files_found: Vec<&'static str>,
     installs: HashMap<PathBuf, InstallOutcome>,
+    // Separate from `installs`: a dir could hold both package.json and mix.exs.
+    mix_installs: HashMap<PathBuf, InstallOutcome>,
     no_install: bool,
     path: OsString,
+    /// Asks the user before installs that execute dependency scripts
+    /// (npm/yarn). `None` (non-interactive) means such installs are skipped.
+    confirm: Option<ConfirmFn>,
 }
 
 impl ToolchainContext {
@@ -341,8 +395,10 @@ impl ToolchainContext {
             wrapper,
             env_files_found,
             installs: HashMap::new(),
+            mix_installs: HashMap::new(),
             no_install,
             path,
+            confirm: None,
         }
     }
 
@@ -352,6 +408,16 @@ impl ToolchainContext {
 
     pub fn env_files_found(&self) -> &[&'static str] {
         &self.env_files_found
+    }
+
+    /// The PATH captured when this context was created.
+    pub(crate) fn path(&self) -> &OsStr {
+        &self.path
+    }
+
+    /// Set the interactive confirmation callback for script-running installs.
+    pub fn set_confirm(&mut self, confirm: ConfirmFn) {
+        self.confirm = Some(confirm);
     }
 
     /// Hint suffix when env config files exist but no wrapper binary is
@@ -413,6 +479,78 @@ impl ToolchainContext {
         outcome
     }
 
+    /// Ensure Elixir mix dependencies are fetched for a service directory,
+    /// running `mix deps.get` if needed. Cached per service directory.
+    pub fn ensure_mix_deps(&mut self, service_dir: &Path) -> InstallOutcome {
+        if let Some(outcome) = self.mix_installs.get(service_dir) {
+            return outcome.clone();
+        }
+        let outcome = self.install_mix_deps(service_dir);
+        self.mix_installs
+            .insert(service_dir.to_path_buf(), outcome.clone());
+        outcome
+    }
+
+    fn install_mix_deps(&self, service_dir: &Path) -> InstallOutcome {
+        if mix_deps_present(service_dir) {
+            return InstallOutcome::AlreadyInstalled;
+        }
+        if self.no_install {
+            return InstallOutcome::SkippedNoInstall;
+        }
+        if !binary_on_path("mix", &self.path) && self.wrapper.is_none() {
+            return InstallOutcome::SkippedNoPm { pm_binary: "mix" };
+        }
+        let (program, args) = self.finalize("mix", vec!["deps.get".into()]);
+
+        let mut command = Command::new(&program);
+        command.args(&args);
+        command.current_dir(service_dir);
+        command.env("NO_COLOR", "1");
+        command.env("CI", "1");
+        command.env("PATH", &self.path);
+
+        match run_with_timeout(&mut command, INSTALL_TIMEOUT) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                InstallOutcome::SkippedNoPm { pm_binary: "mix" }
+            }
+            Err(e) => InstallOutcome::Failed {
+                exit_code: None,
+                output_tail: format!("failed to run `{program}`: {e}"),
+            },
+            Ok(output) if output.success => InstallOutcome::Installed,
+            Ok(output) => {
+                let mut tail = output_preview(&output.stdout, &output.stderr, 5)
+                    .unwrap_or_else(|| "no output".to_string());
+                if output.timed_out {
+                    tail = format!("timed out after {}s", INSTALL_TIMEOUT.as_secs());
+                }
+                InstallOutcome::Failed {
+                    exit_code: output.exit_code,
+                    output_tail: tail,
+                }
+            }
+        }
+    }
+
+    /// Run pnpm's interactive build-approval picker with inherited stdio, so
+    /// the user decides which dependency build scripts may run. Returns true
+    /// when the command completed successfully. Only call when a TTY is
+    /// available.
+    pub fn run_pnpm_approve_builds(&self, workspace_root: &Path) -> bool {
+        let (program, args) = self.finalize("pnpm", vec!["approve-builds".into()]);
+        Command::new(&program)
+            .args(&args)
+            .current_dir(workspace_root)
+            .env("PATH", &self.path)
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
     fn install_js_deps(&self, js: &JsToolchain) -> InstallOutcome {
         if js_deps_present(&js.workspace_root) {
             return InstallOutcome::AlreadyInstalled;
@@ -427,6 +565,23 @@ impl ToolchainContext {
             };
         }
         let args: Vec<String> = args.into_iter().map(String::from).collect();
+        // npm/yarn installs execute dependency lifecycle scripts — only run
+        // them with explicit interactive approval. pnpm/bun block untrusted
+        // scripts by default and stay fully automatic.
+        if js.pm.runs_install_scripts() {
+            let install_cmd = std::iter::once(program.to_string())
+                .chain(args.iter().cloned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let prompt = format!(
+                "`{install_cmd}` in {} may run dependency install scripts — run it now?",
+                js.workspace_root.display()
+            );
+            match &self.confirm {
+                Some(confirm) if confirm(&prompt) => {}
+                _ => return InstallOutcome::SkippedNeedsApproval,
+            }
+        }
         let (program, args) = self.finalize(program, args);
 
         let mut command = Command::new(&program);
@@ -446,6 +601,17 @@ impl ToolchainContext {
             },
             Ok(output) if output.success => InstallOutcome::Installed,
             Ok(output) => {
+                // pnpm (strictDepBuilds default) fails AFTER writing
+                // node_modules when build scripts are unapproved — deps are
+                // complete and usable.
+                if js.pm == PackageManager::Pnpm
+                    && !output.timed_out
+                    && (output.stdout.contains("ERR_PNPM_IGNORED_BUILDS")
+                        || output.stderr.contains("ERR_PNPM_IGNORED_BUILDS"))
+                    && js_deps_present(&js.workspace_root)
+                {
+                    return InstallOutcome::InstalledIgnoredBuilds;
+                }
                 let mut tail = output_preview(&output.stdout, &output.stderr, 5)
                     .unwrap_or_else(|| "no output".to_string());
                 if output.timed_out {
@@ -889,6 +1055,55 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn pnpm_ignored_builds_with_node_modules_counts_as_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        // pnpm 11 with strictDepBuilds writes node_modules, then exits 1.
+        make_stub(
+            &bin,
+            "pnpm",
+            "#!/bin/sh\n/bin/mkdir -p node_modules\necho ' ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: esbuild@0.27.7' >&2\nexit 1\n",
+        );
+        let js = js_fixture(tmp.path());
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.into_os_string());
+        assert_eq!(
+            ctx.ensure_js_deps(&js),
+            InstallOutcome::InstalledIgnoredBuilds
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pnpm_ignored_builds_without_node_modules_stays_failed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        make_stub(
+            &bin,
+            "pnpm",
+            "#!/bin/sh\necho ' ERR_PNPM_IGNORED_BUILDS ' >&2\nexit 1\n",
+        );
+        let js = js_fixture(tmp.path());
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.into_os_string());
+        assert!(matches!(
+            ctx.ensure_js_deps(&js),
+            InstallOutcome::Failed { .. }
+        ));
+    }
+
+    #[test]
+    fn pnpm_unapproved_builds_finds_placeholders() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(pnpm_unapproved_builds(tmp.path()).is_empty());
+
+        write(
+            &tmp.path().join("pnpm-workspace.yaml"),
+            "packages:\n  - apps/*\nallowBuilds:\n  esbuild: set this to true or false\n  sharp: true\n  workerd: false\n",
+        );
+        assert_eq!(pnpm_unapproved_builds(tmp.path()), vec!["esbuild"]);
+    }
+
     #[test]
     fn ensure_js_deps_skips() {
         let tmp = tempfile::tempdir().unwrap();
@@ -907,6 +1122,124 @@ mod tests {
         fs::create_dir_all(tmp.path().join("node_modules")).unwrap();
         let mut ctx = ToolchainContext::with_path(tmp.path(), false, OsString::new());
         assert_eq!(ctx.ensure_js_deps(&js), InstallOutcome::AlreadyInstalled);
+    }
+
+    // --- script-running installs need approval ---
+
+    #[cfg(unix)]
+    #[test]
+    fn npm_install_gated_on_interactive_approval() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        let marker = tmp.path().join("marker");
+        make_stub(
+            &bin,
+            "npm",
+            &format!("#!/bin/sh\necho ran >> {}\nexit 0\n", marker.display()),
+        );
+        write(&tmp.path().join("package-lock.json"), "{}");
+        let js = detect_js_toolchain(tmp.path(), tmp.path());
+        assert_eq!(js.pm, PackageManager::Npm);
+
+        // Non-interactive (no confirm callback): skipped, npm never runs.
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.clone().into_os_string());
+        assert_eq!(
+            ctx.ensure_js_deps(&js),
+            InstallOutcome::SkippedNeedsApproval
+        );
+        assert!(!marker.exists());
+
+        // Declined: skipped.
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.clone().into_os_string());
+        ctx.set_confirm(std::sync::Arc::new(|_: &str| false));
+        assert_eq!(
+            ctx.ensure_js_deps(&js),
+            InstallOutcome::SkippedNeedsApproval
+        );
+        assert!(!marker.exists());
+
+        // Approved: installs.
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.into_os_string());
+        ctx.set_confirm(std::sync::Arc::new(|_: &str| true));
+        assert_eq!(ctx.ensure_js_deps(&js), InstallOutcome::Installed);
+        assert!(marker.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pnpm_install_needs_no_approval() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        make_stub(&bin, "pnpm", "#!/bin/sh\nexit 0\n");
+        let js = js_fixture(tmp.path());
+        // No confirm callback set — pnpm blocks untrusted scripts itself.
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.into_os_string());
+        assert_eq!(ctx.ensure_js_deps(&js), InstallOutcome::Installed);
+    }
+
+    // --- mix deps ---
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_mix_deps_installs_and_caches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        let marker = tmp.path().join("marker");
+        make_stub(
+            &bin,
+            "mix",
+            &format!("#!/bin/sh\necho ran >> {}\nexit 0\n", marker.display()),
+        );
+        write(&tmp.path().join("mix.exs"), "");
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.into_os_string());
+
+        assert_eq!(ctx.ensure_mix_deps(tmp.path()), InstallOutcome::Installed);
+        assert_eq!(ctx.ensure_mix_deps(tmp.path()), InstallOutcome::Installed);
+        let runs = fs::read_to_string(&marker).unwrap();
+        assert_eq!(runs.lines().count(), 1, "deps.get must run once (cached)");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_mix_deps_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        make_stub(
+            &bin,
+            "mix",
+            "#!/bin/sh\necho 'could not fetch' >&2\nexit 1\n",
+        );
+        write(&tmp.path().join("mix.exs"), "");
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, bin.into_os_string());
+        match ctx.ensure_mix_deps(tmp.path()) {
+            InstallOutcome::Failed { exit_code, .. } => assert_eq!(exit_code, Some(1)),
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ensure_mix_deps_skips() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("mix.exs"), "");
+
+        let mut ctx = ToolchainContext::with_path(tmp.path(), true, OsString::new());
+        assert_eq!(
+            ctx.ensure_mix_deps(tmp.path()),
+            InstallOutcome::SkippedNoInstall
+        );
+
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, OsString::new());
+        assert_eq!(
+            ctx.ensure_mix_deps(tmp.path()),
+            InstallOutcome::SkippedNoPm { pm_binary: "mix" }
+        );
+
+        fs::create_dir_all(tmp.path().join("deps")).unwrap();
+        let mut ctx = ToolchainContext::with_path(tmp.path(), false, OsString::new());
+        assert_eq!(
+            ctx.ensure_mix_deps(tmp.path()),
+            InstallOutcome::AlreadyInstalled
+        );
     }
 
     // --- output preview ---

@@ -481,6 +481,14 @@ fn check_undefined_keys(
     // unknown. Everything else is schema-defined.
     const BUILTINS: &[&str] = &["type", "allow_diagram_cycles"];
 
+    // Keys from removed dg features. Checked only after the schema lookups so
+    // a project that defines its own field with the same name is unaffected.
+    const DEPRECATED_KEYS: &[(&str, &str)] = &[(
+        "code_paths",
+        "code_paths was removed — delete this key and reference the doc ID from \
+         source code comments instead (code refs are scanned automatically; see `dg refs`)",
+    )];
+
     for key in fm.keys() {
         // Check type-specific fields
         if type_def.fields.iter().any(|f| f.name == *key) {
@@ -492,6 +500,19 @@ fn check_undefined_keys(
         }
         // Check builtins
         if BUILTINS.contains(&key.as_str()) {
+            continue;
+        }
+        if let Some((_, hint)) = DEPRECATED_KEYS.iter().find(|(k, _)| k == key) {
+            diags.push(Diagnostic {
+                severity: Severity::Error,
+                code: "F023".into(),
+                message: format!(
+                    "deprecated frontmatter key \"{key}\" for type \"{}\"",
+                    type_def.name
+                ),
+                location: format!("frontmatter.{key}"),
+                hint: Some((*hint).to_string()),
+            });
             continue;
         }
         diags.push(Diagnostic {

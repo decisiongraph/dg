@@ -26,6 +26,42 @@ impl EcosystemHit {
     }
 }
 
+/// Detected ecosystems plus npm workspace layout, so coverage checks can
+/// treat a root npm entry as covering workspace member manifests (Dependabot
+/// handles npm/yarn/pnpm workspaces from the workspace root).
+#[derive(Debug, Default)]
+pub struct EcosystemScan {
+    /// All detected update entries, including npm workspace members.
+    pub hits: Vec<EcosystemHit>,
+    /// Positive npm workspace member globs in Dependabot dir form ("/apps/*"),
+    /// from root pnpm-workspace.yaml `packages:` and package.json `workspaces`.
+    pub npm_workspace_globs: Vec<String>,
+    /// Negated ("!...") member globs excluded from membership.
+    pub npm_workspace_negations: Vec<String>,
+}
+
+impl EcosystemScan {
+    /// True if `dir` is an npm workspace member directory (not the root).
+    fn is_npm_workspace_member(&self, dir: &str) -> bool {
+        dir != "/"
+            && self.npm_workspace_globs.iter().any(|g| dir_matches(g, dir))
+            && !self
+                .npm_workspace_negations
+                .iter()
+                .any(|g| dir_matches(g, dir))
+    }
+
+    /// Hits suitable for generating a dependabot.yml: npm workspace member
+    /// directories are dropped because the root entry covers them.
+    pub fn config_hits(&self) -> Vec<EcosystemHit> {
+        self.hits
+            .iter()
+            .filter(|h| !(h.ecosystem == "npm" && self.is_npm_workspace_member(&h.directory)))
+            .cloned()
+            .collect()
+    }
+}
+
 /// Map a manifest filename to its Dependabot ecosystem.
 fn ecosystem_for_file(name: &str) -> Option<&'static str> {
     match name {
@@ -75,9 +111,10 @@ fn to_dependabot_dir(rel: &Path) -> String {
     }
 }
 
-/// Scan `root` for package manifests and return deduplicated Dependabot update entries,
-/// sorted by directory then ecosystem. Respects `.gitignore`.
-pub fn detect_ecosystems(root: &Path) -> Vec<EcosystemHit> {
+/// Scan `root` for package manifests and return deduplicated Dependabot update
+/// entries (sorted by directory then ecosystem) plus npm workspace layout.
+/// Respects `.gitignore`.
+pub fn detect_ecosystems(root: &Path) -> EcosystemScan {
     let mut hits: BTreeSet<EcosystemHit> = BTreeSet::new();
     // Terraform/OpenTofu share file layout (.tf, .terraform.lock.hcl) but are
     // separate Dependabot ecosystems — collect dirs first, decide after the walk.
@@ -198,15 +235,19 @@ pub fn detect_ecosystems(root: &Path) -> Vec<EcosystemHit> {
         .collect();
     hits.retain(|h| !(h.ecosystem == "pip" && uv_dirs.contains(&h.directory)));
 
-    // Workspace roots cover nested members: one entry at "/" is enough
+    // Cargo workspace roots cover nested members: one entry at "/" is enough.
+    // npm workspace members stay in `hits` (so missing coverage can name
+    // them); config generation collapses them via `config_hits()`.
     if cargo_workspace_at_root(root) {
         hits.retain(|h| h.ecosystem != "cargo" || h.directory == "/");
     }
-    if npm_workspace_at_root(root) {
-        hits.retain(|h| h.ecosystem != "npm" || h.directory == "/");
-    }
+    let (npm_workspace_globs, npm_workspace_negations) = npm_workspace_globs(root);
 
-    hits
+    EcosystemScan {
+        hits,
+        npm_workspace_globs,
+        npm_workspace_negations,
+    }
 }
 
 /// True if root `Cargo.toml` declares a `[workspace]`.
@@ -219,16 +260,48 @@ fn cargo_workspace_at_root(root: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// True if root `package.json` declares npm/yarn workspaces, or `pnpm-workspace.yaml` exists.
-fn npm_workspace_at_root(root: &Path) -> bool {
-    if root.join("pnpm-workspace.yaml").exists() {
-        return true;
+/// npm workspace member globs at `root`, as (positive, negated) lists in
+/// Dependabot dir form. Sources: pnpm-workspace.yaml `packages:` and root
+/// package.json `workspaces` (both the array and `{"packages": [...]}` forms).
+fn npm_workspace_globs(root: &Path) -> (Vec<String>, Vec<String>) {
+    let mut positive = Vec::new();
+    let mut negated = Vec::new();
+    let mut push = |glob: &str| {
+        if let Some(rest) = glob.strip_prefix('!') {
+            negated.push(normalize_dir(rest));
+        } else {
+            positive.push(normalize_dir(glob));
+        }
+    };
+
+    if let Ok(text) = std::fs::read_to_string(root.join("pnpm-workspace.yaml")) {
+        if let Ok(yaml) = serde_yaml::from_str::<serde_yaml::Value>(&text) {
+            for glob in yaml
+                .get("packages")
+                .and_then(|v| v.as_sequence())
+                .into_iter()
+                .flatten()
+                .filter_map(|v| v.as_str())
+            {
+                push(glob);
+            }
+        }
     }
-    std::fs::read_to_string(root.join("package.json"))
-        .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .map(|v| v.get("workspaces").is_some())
-        .unwrap_or(false)
+
+    if let Ok(text) = std::fs::read_to_string(root.join("package.json")) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+            let ws = json.get("workspaces");
+            let globs = ws.and_then(|w| w.as_array()).or_else(|| {
+                ws.and_then(|w| w.get("packages"))
+                    .and_then(|p| p.as_array())
+            });
+            for glob in globs.into_iter().flatten().filter_map(|v| v.as_str()) {
+                push(glob);
+            }
+        }
+    }
+
+    (positive, negated)
 }
 
 /// Locate `.github/dependabot.yml` (or `.yaml`) under `root`.
@@ -317,25 +390,31 @@ fn dir_matches(pattern: &str, dir: &str) -> bool {
 }
 
 /// Return detected hits that have no matching `updates:` entry in the config.
-/// An unparseable config is treated as covering everything — GitHub itself
-/// reports invalid dependabot.yml files, so no extra warning is needed.
-pub fn uncovered_hits(config_text: &str, hits: &[EcosystemHit]) -> Vec<EcosystemHit> {
+/// An npm entry for the workspace root ("/") also covers workspace member
+/// directories. An unparseable config is treated as covering everything —
+/// GitHub itself reports invalid dependabot.yml files, so no extra warning is
+/// needed.
+pub fn uncovered_hits(config_text: &str, scan: &EcosystemScan) -> Vec<EcosystemHit> {
     let config: DependabotConfig = match serde_yaml::from_str(config_text) {
         Ok(c) => c,
         Err(_) => return Vec::new(),
     };
 
-    hits.iter()
+    scan.hits
+        .iter()
         .filter(|hit| {
+            let covers = |pattern: &str| {
+                dir_matches(pattern, &hit.directory)
+                    || (hit.ecosystem == "npm"
+                        && scan.is_npm_workspace_member(&hit.directory)
+                        && dir_matches(pattern, "/"))
+            };
             !config.updates.iter().any(|u| {
                 if u.package_ecosystem.as_deref() != Some(hit.ecosystem.as_str()) {
                     return false;
                 }
-                u.directory
-                    .as_deref()
-                    .map(|d| dir_matches(d, &hit.directory))
-                    .unwrap_or(false)
-                    || u.directories.iter().any(|d| dir_matches(d, &hit.directory))
+                u.directory.as_deref().map(covers).unwrap_or(false)
+                    || u.directories.iter().any(|d| covers(d))
             })
         })
         .cloned()
@@ -444,7 +523,7 @@ mod tests {
         write(root, "services/web/package.json", "{}");
         write(root, ".github/workflows/ci.yml", "name: ci\n");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.contains(&EcosystemHit {
             ecosystem: "cargo".into(),
             directory: "/".into()
@@ -478,7 +557,7 @@ mod tests {
         );
         write(root, "crates/a/Cargo.toml", "[package]\nname = \"a\"\n");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         let cargo: Vec<_> = hits.iter().filter(|h| h.ecosystem == "cargo").collect();
         assert_eq!(cargo.len(), 1);
         assert_eq!(cargo[0].directory, "/");
@@ -492,7 +571,7 @@ mod tests {
         write(root, "infra/envs/prod/.terraform.lock.hcl", "");
         write(root, "infra/modules/net/main.tf", "");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         let tf: Vec<_> = hits.iter().filter(|h| h.ecosystem == "terraform").collect();
         assert_eq!(tf.len(), 1);
         assert_eq!(tf[0].directory, "/infra/envs/prod");
@@ -504,7 +583,7 @@ mod tests {
         let root = tmp.path();
         write(root, "infra/main.tf", "");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.iter().any(|h| h.ecosystem == "terraform"));
     }
 
@@ -519,7 +598,7 @@ mod tests {
             "provider \"registry.opentofu.org/hashicorp/aws\" {\n  version = \"5.0.0\"\n}\n",
         );
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.contains(&EcosystemHit {
             ecosystem: "opentofu".into(),
             directory: "/infra/prod".into()
@@ -533,7 +612,7 @@ mod tests {
         let root = tmp.path();
         write(root, "infra/opentofu/main.tf", "");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.contains(&EcosystemHit {
             ecosystem: "opentofu".into(),
             directory: "/infra/opentofu".into()
@@ -547,7 +626,7 @@ mod tests {
         let root = tmp.path();
         write(root, "infra/main.tofu", "");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.contains(&EcosystemHit {
             ecosystem: "opentofu".into(),
             directory: "/infra".into()
@@ -558,7 +637,7 @@ mod tests {
         write(root2, "envs/dev/main.tf", "");
         write(root2, "envs/dev/.opentofu-version", "1.8.0\n");
 
-        let hits2 = detect_ecosystems(root2);
+        let hits2 = detect_ecosystems(root2).hits;
         assert!(hits2.contains(&EcosystemHit {
             ecosystem: "opentofu".into(),
             directory: "/envs/dev".into()
@@ -576,7 +655,7 @@ mod tests {
             "provider \"registry.terraform.io/hashicorp/aws\" {\n  version = \"5.0.0\"\n}\n",
         );
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.contains(&EcosystemHit {
             ecosystem: "terraform".into(),
             directory: "/infra/prod".into()
@@ -591,7 +670,7 @@ mod tests {
         write(root, "tool/pyproject.toml", "");
         write(root, "tool/uv.lock", "");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.iter().any(|h| h.ecosystem == "uv"));
         assert!(!hits.iter().any(|h| h.ecosystem == "pip"));
     }
@@ -604,14 +683,21 @@ mod tests {
         write(root, "vendor/pkg/package.json", "{}");
         write(root, "go.mod", "module x\n");
 
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(!hits.iter().any(|h| h.ecosystem == "npm"));
         assert!(hits.iter().any(|h| h.ecosystem == "gomod"));
     }
 
+    fn scan_of(hits: Vec<EcosystemHit>) -> EcosystemScan {
+        EcosystemScan {
+            hits,
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_uncovered_hits() {
-        let hits = vec![
+        let scan = scan_of(vec![
             EcosystemHit {
                 ecosystem: "cargo".into(),
                 directory: "/".into(),
@@ -620,16 +706,16 @@ mod tests {
                 ecosystem: "mix".into(),
                 directory: "/services/api".into(),
             },
-        ];
+        ]);
         let config = "version: 2\nupdates:\n  - package-ecosystem: cargo\n    directory: /\n    schedule:\n      interval: weekly\n";
-        let missing = uncovered_hits(config, &hits);
+        let missing = uncovered_hits(config, &scan);
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0].ecosystem, "mix");
     }
 
     #[test]
     fn test_uncovered_hits_directories_glob() {
-        let hits = vec![
+        let scan = scan_of(vec![
             EcosystemHit {
                 ecosystem: "mix".into(),
                 directory: "/services/api".into(),
@@ -638,30 +724,113 @@ mod tests {
                 ecosystem: "npm".into(),
                 directory: "/services/web".into(),
             },
-        ];
+        ]);
         let config = "version: 2\nupdates:\n  - package-ecosystem: mix\n    directories:\n      - \"/services/*\"\n  - package-ecosystem: npm\n    directory: \"/services/*\"\n";
-        assert!(uncovered_hits(config, &hits).is_empty());
+        assert!(uncovered_hits(config, &scan).is_empty());
     }
 
     #[test]
     fn test_uncovered_hits_invalid_yaml_covers_all() {
-        let hits = vec![EcosystemHit {
+        let scan = scan_of(vec![EcosystemHit {
             ecosystem: "cargo".into(),
             directory: "/".into(),
-        }];
-        assert!(uncovered_hits(": not yaml [", &hits).is_empty());
+        }]);
+        assert!(uncovered_hits(": not yaml [", &scan).is_empty());
     }
 
     #[test]
     fn test_generate_config() {
-        let hits = vec![EcosystemHit {
+        let scan = scan_of(vec![EcosystemHit {
             ecosystem: "cargo".into(),
             directory: "/".into(),
-        }];
-        let yaml = generate_config(&hits);
+        }]);
+        let yaml = generate_config(&scan.hits);
         assert!(yaml.starts_with("version: 2\n"));
         // Round-trip: generated config covers all hits
-        assert!(uncovered_hits(&yaml, &hits).is_empty());
+        assert!(uncovered_hits(&yaml, &scan).is_empty());
+    }
+
+    /// A pnpm monorepo: workspace with member apps, plus a standalone npm
+    /// service that is NOT a workspace member.
+    #[test]
+    fn test_npm_workspace_members_reported_and_covered_by_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, "package.json", "{}");
+        write(root, "pnpm-lock.yaml", "");
+        write(
+            root,
+            "pnpm-workspace.yaml",
+            "packages:\n  - apps/*\n  - packages/*\n",
+        );
+        write(root, "apps/board/package.json", "{}");
+        write(root, "apps/web/package.json", "{}");
+        write(root, "services/marketing/package.json", "{}");
+        write(root, "services/marketing/package-lock.json", "{}");
+
+        let scan = detect_ecosystems(root);
+        for dir in ["/", "/apps/board", "/apps/web", "/services/marketing"] {
+            assert!(
+                scan.hits
+                    .iter()
+                    .any(|h| h.ecosystem == "npm" && h.directory == dir),
+                "expected npm hit for {dir}: {:?}",
+                scan.hits
+            );
+        }
+
+        // No npm entry at all → every npm dir is uncovered.
+        let missing = uncovered_hits("version: 2\nupdates: []\n", &scan);
+        let npm_dirs: Vec<&str> = missing
+            .iter()
+            .filter(|h| h.ecosystem == "npm")
+            .map(|h| h.directory.as_str())
+            .collect();
+        assert_eq!(
+            npm_dirs,
+            vec!["/", "/apps/board", "/apps/web", "/services/marketing"]
+        );
+
+        // Root npm entry covers the workspace members but not the
+        // standalone service.
+        let config = "version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n";
+        let missing = uncovered_hits(config, &scan);
+        let npm_dirs: Vec<&str> = missing
+            .iter()
+            .filter(|h| h.ecosystem == "npm")
+            .map(|h| h.directory.as_str())
+            .collect();
+        assert_eq!(npm_dirs, vec!["/services/marketing"]);
+
+        // Config generation collapses members but keeps the standalone dir.
+        let config_dirs: Vec<String> = scan
+            .config_hits()
+            .into_iter()
+            .filter(|h| h.ecosystem == "npm")
+            .map(|h| h.directory)
+            .collect();
+        assert_eq!(config_dirs, vec!["/", "/services/marketing"]);
+        assert!(uncovered_hits(&generate_config(&scan.config_hits()), &scan).is_empty());
+    }
+
+    #[test]
+    fn test_npm_workspace_negated_glob_excludes_member() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "package.json",
+            r#"{"workspaces": {"packages": ["apps/*", "!apps/legacy"]}}"#,
+        );
+        write(root, "apps/board/package.json", "{}");
+        write(root, "apps/legacy/package.json", "{}");
+
+        let scan = detect_ecosystems(root);
+        let config = "version: 2\nupdates:\n  - package-ecosystem: npm\n    directory: /\n";
+        let missing = uncovered_hits(config, &scan);
+        let npm_dirs: Vec<&str> = missing.iter().map(|h| h.directory.as_str()).collect();
+        // Excluded member is not covered by the root entry.
+        assert_eq!(npm_dirs, vec!["/apps/legacy"]);
     }
 
     #[test]
@@ -678,7 +847,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write(root, "flake.nix", "{ }\n");
-        let hits = detect_ecosystems(root);
+        let hits = detect_ecosystems(root).hits;
         assert!(hits.contains(&EcosystemHit {
             ecosystem: "nix".into(),
             directory: "/".into()

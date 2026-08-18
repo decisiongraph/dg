@@ -258,7 +258,8 @@ fn setup_dependabot(root: &Path, force: bool) -> Result<()> {
         return Ok(());
     }
 
-    let hits = db::detect_ecosystems(root);
+    // npm workspace members are covered by the generated root entry.
+    let hits = db::detect_ecosystems(root).config_hits();
     if !hits.is_empty() && db::find_config(root).is_none() {
         let labels: Vec<String> = hits.iter().map(db::EcosystemHit::label).collect();
         eprintln!("  dependabot: detected {}", labels.join(", "));

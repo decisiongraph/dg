@@ -24,7 +24,8 @@ pub struct ValidateArgs {
     #[arg(long, value_delimiter = ',')]
     pub skip: Vec<String>,
 
-    /// Skip auto-installing JS dependencies before running tests/linters
+    /// Skip auto-installing JS/mix dependencies and starting devenv services
+    /// before running tests/linters
     #[arg(long)]
     pub no_install: bool,
 }
@@ -55,6 +56,7 @@ pub fn run(
         let opts = validation::ServiceCheckOptions {
             no_install: args.no_install,
             progress: crate::progress::stderr_sink(),
+            confirm: crate::progress::install_confirm(),
         };
         let outcome = validation::validate_service_checks(root, &opts);
         result.file_results.extend(outcome.file_results);

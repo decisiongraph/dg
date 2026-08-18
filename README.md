@@ -119,18 +119,31 @@ dg set OPP-001 --remove tags                      # Remove a field
 # Validate & lint
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes
-dg validate --no-install             # Don't auto-install JS deps before running tests/linters
+dg validate --no-install             # Don't auto-install deps / start devenv services before checks
 dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
 # GitHub-hosted projects: warns when detected package ecosystems (cargo, npm, mix,
 # docker, terraform, opentofu, nix, ...) lack .github/dependabot.yml coverage
 # (SV011/SV012) — OpenTofu is told apart from Terraform via .tofu files,
 # .opentofu-version, lockfile registry.opentofu.org providers, or dir name —
 # and when devenv.lock has no scheduled `devenv update` workflow (SV013).
+# npm workspace members (pnpm-workspace.yaml packages / package.json workspaces)
+# are covered by a root npm entry; standalone package.json dirs outside the
+# workspace need their own entry and are listed individually when missing.
 # Service tests/linters run via the detected JS package manager (packageManager
-# field or lockfile: bun/pnpm/yarn/npm); missing node_modules are installed
-# automatically first (SV014 warns when that's not possible). Binaries missing
-# from PATH are run through devenv/mise/nix/direnv when a matching config
-# (devenv.nix, mise.toml, .tool-versions, flake.nix, .envrc) exists at the root.
+# field or lockfile: bun/pnpm/yarn/npm); missing node_modules and Elixir deps/
+# are installed automatically first (SV014 warns when that's not possible).
+# Installs that can execute dependency scripts (npm/yarn) only run after an
+# interactive [y/N] confirmation; pnpm/bun block untrusted scripts themselves
+# and `mix deps.get` only fetches, so those run unattended. A pnpm install
+# blocked on unapproved build scripts still counts as installed, with SV018
+# pointing at `pnpm approve-builds` / unresolved allowBuilds placeholders.
+# Deprecated frontmatter keys removed from dg (e.g. code_paths) are errors (F023).
+# Binaries missing from PATH are run through devenv/mise/nix/direnv when a
+# matching config (devenv.nix, mise.toml, .tool-versions, flake.nix, .envrc)
+# exists at the root. When devenv.nix declares services (postgres, redis, ...),
+# they are started for the duration of the checks (`devenv up -d` + readiness
+# wait) and stopped afterwards unless they were already running; SV019 warns
+# when starting fails.
 # Phoenix services whose config/test.exs binds a hardcoded port with
 # `server: true` (Wallaby setups) get SV015 suggesting `port: 0` + a runtime-
 # resolved base_url, so parallel test runs can't collide.

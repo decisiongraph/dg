@@ -360,12 +360,18 @@ pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResu
         return;
     }
 
-    let hits = db::detect_ecosystems(dir);
-    if !hits.is_empty() {
+    let scan = db::detect_ecosystems(dir);
+    if !scan.hits.is_empty() {
         let config_path = db::find_config(dir);
-        let labels = hits.iter().map(db::EcosystemHit::label).collect::<Vec<_>>();
         match config_path {
             None => {
+                // Workspace members are covered by the root entry the hint
+                // proposes, so count/list only config-worthy hits here.
+                let config_hits = scan.config_hits();
+                let labels = config_hits
+                    .iter()
+                    .map(db::EcosystemHit::label)
+                    .collect::<Vec<_>>();
                 file_results.push(FileResult {
                     path: dir.join(".github/dependabot.yml").display().to_string(),
                     diagnostics: vec![Diagnostic {
@@ -373,7 +379,7 @@ pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResu
                         code: "SV011".into(),
                         message: format!(
                             "GitHub-hosted project has no .github/dependabot.yml but {} package ecosystem(s) were detected",
-                            hits.len()
+                            config_hits.len()
                         ),
                         location: ".github/dependabot.yml".into(),
                         hint: Some(format!(
@@ -385,7 +391,7 @@ pub(crate) fn dependabot_diagnostics(dir: &Path, file_results: &mut Vec<FileResu
             }
             Some(path) => {
                 if let Ok(text) = std::fs::read_to_string(&path) {
-                    let missing = db::uncovered_hits(&text, &hits);
+                    let missing = db::uncovered_hits(&text, &scan);
                     if !missing.is_empty() {
                         let missing_labels = missing
                             .iter()
@@ -444,6 +450,9 @@ pub struct ServiceCheckOptions {
     pub no_install: bool,
     /// Receiver for progress events; `None` runs silently.
     pub progress: Option<std::sync::Arc<dyn crate::progress::ProgressSink>>,
+    /// Interactive confirmation for installs that execute dependency scripts
+    /// (npm/yarn). `None` (non-interactive) skips those installs.
+    pub confirm: Option<crate::toolchain::ConfirmFn>,
 }
 
 impl std::fmt::Debug for ServiceCheckOptions {
@@ -451,6 +460,7 @@ impl std::fmt::Debug for ServiceCheckOptions {
         f.debug_struct("ServiceCheckOptions")
             .field("no_install", &self.no_install)
             .field("progress", &self.progress.is_some())
+            .field("confirm", &self.confirm.is_some())
             .finish()
     }
 }
@@ -497,12 +507,17 @@ struct ServicePlan {
 pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> ServiceCheckOutcome {
     let mut results = Vec::new();
     let mut ctx = crate::toolchain::ToolchainContext::new(dir, opts.no_install);
+    if let Some(confirm) = &opts.confirm {
+        ctx.set_confirm(confirm.clone());
+    }
 
     let plans = plan_service_checks(dir);
 
     // Install JS deps serially, once per workspace root (cached in ctx) —
     // concurrent installs into one package store would race.
     let mut runnable = Vec::new();
+    let mut checked_pnpm_roots: HashSet<PathBuf> = HashSet::new();
+    let mut broken_pnpm_roots: HashSet<PathBuf> = HashSet::new();
     for plan in plans {
         if let Some(js) = &plan.js {
             if let Some(sink) = &opts.progress {
@@ -514,13 +529,81 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Servic
                     ));
                 }
             }
-            if let Some(diag) = ensure_js_deps_diagnostic(&mut ctx, js, &plan.location) {
+            let outcome = ctx.ensure_js_deps(js);
+            // Deps are usable but pnpm skipped build scripts pending approval.
+            // pnpm 11 also gates `pnpm exec` on this state, so unresolved
+            // roots skip their checks. The yaml check keeps this alive on
+            // reruns, where the install itself is skipped (node_modules
+            // already present). Interactive runs offer pnpm's own
+            // `approve-builds` picker — the user decides, dg never approves
+            // build scripts on its own.
+            let unapproved = crate::toolchain::pnpm_unapproved_builds(&js.workspace_root);
+            if matches!(
+                outcome,
+                crate::toolchain::InstallOutcome::InstalledIgnoredBuilds
+            ) || !unapproved.is_empty()
+            {
+                if checked_pnpm_roots.insert(js.workspace_root.clone()) {
+                    let mut resolved = false;
+                    if let Some(confirm) = &opts.confirm {
+                        let names = if unapproved.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" ({})", unapproved.join(", "))
+                        };
+                        let prompt = format!(
+                            "pnpm dependency build scripts are unapproved{names} in {} — \
+                             run `pnpm approve-builds` now?",
+                            js.workspace_root.display()
+                        );
+                        if confirm(&prompt) {
+                            resolved = ctx.run_pnpm_approve_builds(&js.workspace_root)
+                                && crate::toolchain::pnpm_unapproved_builds(&js.workspace_root)
+                                    .is_empty();
+                        }
+                    }
+                    if !resolved {
+                        results.push(pnpm_unapproved_builds_result(
+                            dir,
+                            &js.workspace_root,
+                            &unapproved,
+                        ));
+                        broken_pnpm_roots.insert(js.workspace_root.clone());
+                    }
+                }
+                if broken_pnpm_roots.contains(&js.workspace_root) {
+                    // `pnpm exec` fails in this state — running the checks
+                    // would produce misleading SV007/SV010; SV018 explains.
+                    continue;
+                }
+            }
+            if let Some(diag) = js_deps_diagnostic(&ctx, &outcome, js, &plan.location) {
                 results.push(FileResult {
                     path: plan.rel.clone(),
                     diagnostics: vec![diag],
                 });
                 // Running tools without deps would produce misleading
                 // SV007/SV010 failures.
+                continue;
+            }
+        }
+        if plan.service_dir.join("mix.exs").is_file() {
+            if let Some(sink) = &opts.progress {
+                if !opts.no_install && !crate::toolchain::mix_deps_present(&plan.service_dir) {
+                    sink.notice(&format!(
+                        "installing mix dependencies in {}",
+                        plan.service_dir.display()
+                    ));
+                }
+            }
+            let outcome = ctx.ensure_mix_deps(&plan.service_dir);
+            if let Some(diag) =
+                mix_deps_diagnostic(&ctx, &outcome, &plan.service_dir, &plan.location)
+            {
+                results.push(FileResult {
+                    path: plan.rel.clone(),
+                    diagnostics: vec![diag],
+                });
                 continue;
             }
         }
@@ -532,6 +615,45 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Servic
             file_results: results,
             timings: Vec::new(),
         };
+    }
+
+    // Start devenv-managed services (postgres, …) for the duration of the
+    // checks — on a fresh clone the test suites would otherwise fail to reach
+    // their backing services. Stopped again (guard drop) only if dg started
+    // them.
+    let mut devenv_guard = None;
+    if !opts.no_install && runnable.iter().any(|p| p.test_framework.is_some()) {
+        if let Some(service_names) = crate::devenv::declared_services(dir) {
+            if crate::toolchain::binary_on_path("devenv", ctx.path()) {
+                use crate::devenv::StartOutcome;
+                match crate::devenv::start_services(
+                    dir,
+                    ctx.path(),
+                    &service_names,
+                    opts.progress.as_deref(),
+                ) {
+                    StartOutcome::Started(guard) => devenv_guard = Some(guard),
+                    StartOutcome::AlreadyRunning => {}
+                    StartOutcome::Failed { output_tail } => {
+                        results.push(FileResult {
+                            path: "devenv.nix".into(),
+                            diagnostics: vec![Diagnostic {
+                                severity: Severity::Warning,
+                                code: "SV019".into(),
+                                message: "devenv services could not be started — dependent \
+                                          tests may fail"
+                                    .into(),
+                                location: "devenv.nix".into(),
+                                hint: Some(format!(
+                                    "`devenv up -d` failed:\n        {output_tail}\n        \
+                                     start services manually with `devenv up -d`"
+                                )),
+                            }],
+                        });
+                    }
+                }
+            }
+        }
     }
 
     let check_count: usize = runnable
@@ -560,6 +682,10 @@ pub fn validate_service_checks(dir: &Path, opts: &ServiceCheckOptions) -> Servic
     if let Some(sink) = &opts.progress {
         sink.end();
     }
+
+    // Stop services dg started before assembling results, so `devenv down`
+    // time is not attributed to any check.
+    drop(devenv_guard);
 
     let mut timings = Vec::new();
     for (frs, ts) in per_service {
@@ -677,10 +803,46 @@ fn run_service_plan(
     (out, timings)
 }
 
-/// Ensure JS deps are installed; return an SV014 diagnostic when they are
+/// SV018: pnpm installed dependencies but left build scripts unapproved.
+fn pnpm_unapproved_builds_result(
+    dir: &Path,
+    workspace_root: &Path,
+    unapproved: &[String],
+) -> FileResult {
+    let rel = workspace_root
+        .strip_prefix(dir)
+        .unwrap_or(Path::new(""))
+        .join("pnpm-workspace.yaml");
+    let rel = rel.to_string_lossy().replace('\\', "/");
+    let names = if unapproved.is_empty() {
+        String::new()
+    } else {
+        format!(" for {}", unapproved.join(", "))
+    };
+    FileResult {
+        path: rel.clone(),
+        diagnostics: vec![Diagnostic {
+            severity: Severity::Warning,
+            code: "SV018".into(),
+            message: format!("pnpm dependency build scripts are unapproved{names}"),
+            location: rel,
+            hint: Some(format!(
+                "pnpm refuses to run commands until each build script is approved or \
+                 denied, so this workspace's lint/test checks were skipped — run \
+                 `pnpm approve-builds` in {} (or set each allowBuilds entry to \
+                 true/false in pnpm-workspace.yaml), or rerun `dg validate` in a \
+                 terminal to approve interactively",
+                workspace_root.display()
+            )),
+        }],
+    }
+}
+
+/// Map a JS deps install outcome to an SV014 diagnostic when dependencies are
 /// missing and could not be installed.
-fn ensure_js_deps_diagnostic(
-    ctx: &mut crate::toolchain::ToolchainContext,
+fn js_deps_diagnostic(
+    ctx: &crate::toolchain::ToolchainContext,
+    outcome: &crate::toolchain::InstallOutcome,
     js: &crate::toolchain::JsToolchain,
     location: &str,
 ) -> Option<Diagnostic> {
@@ -694,10 +856,19 @@ fn ensure_js_deps_diagnostic(
         .join(" ");
     let root = js.workspace_root.display();
 
-    let hint = match ctx.ensure_js_deps(js) {
-        InstallOutcome::AlreadyInstalled | InstallOutcome::Installed => return None,
+    let hint = match outcome {
+        InstallOutcome::AlreadyInstalled
+        | InstallOutcome::Installed
+        | InstallOutcome::InstalledIgnoredBuilds => return None,
         InstallOutcome::SkippedNoInstall => {
             format!("node_modules missing in {root}; rerun without --no-install or run `{install_cmd}` there")
+        }
+        InstallOutcome::SkippedNeedsApproval => {
+            format!(
+                "`{install_cmd}` may execute dependency install scripts, so dg only runs it \
+                 after interactive confirmation — rerun `dg validate` in a terminal and \
+                 approve it, or run `{install_cmd}` in {root} yourself"
+            )
         }
         InstallOutcome::SkippedNoPm { pm_binary } => {
             let mut hint = format!(
@@ -724,6 +895,63 @@ fn ensure_js_deps_diagnostic(
         severity: Severity::Warning,
         code: "SV014".into(),
         message: format!("dependencies not installed for {location} ({pm})"),
+        location: location.to_string(),
+        hint: Some(hint),
+    })
+}
+
+/// Map a mix deps install outcome to an SV014 diagnostic when dependencies
+/// are missing and could not be fetched.
+fn mix_deps_diagnostic(
+    ctx: &crate::toolchain::ToolchainContext,
+    outcome: &crate::toolchain::InstallOutcome,
+    service_dir: &Path,
+    location: &str,
+) -> Option<Diagnostic> {
+    use crate::toolchain::InstallOutcome;
+
+    let root = service_dir.display();
+    let hint = match outcome {
+        InstallOutcome::AlreadyInstalled
+        | InstallOutcome::Installed
+        | InstallOutcome::InstalledIgnoredBuilds => return None,
+        InstallOutcome::SkippedNoInstall => {
+            format!(
+                "deps/ missing in {root}; rerun without --no-install or run `mix deps.get` there"
+            )
+        }
+        // `mix deps.get` only fetches (no dep code runs) — never gated.
+        InstallOutcome::SkippedNeedsApproval => {
+            format!("run `mix deps.get` in {root}")
+        }
+        InstallOutcome::SkippedNoPm { pm_binary } => {
+            let mut hint = format!(
+                "`{pm_binary}` is not on PATH; install Elixir and run `mix deps.get` in {root}"
+            );
+            if let Some(env_hint) = ctx.env_hint() {
+                hint.push_str("\n        ");
+                hint.push_str(&env_hint);
+            }
+            hint
+        }
+        InstallOutcome::Failed {
+            exit_code,
+            output_tail,
+        } => {
+            let code = exit_code
+                .map(|c| format!(" (exit code {c})"))
+                .unwrap_or_default();
+            format!(
+                "`mix deps.get` failed{code} in {root}:\n        {output_tail}\n        \
+                 if Hex is not installed, run `mix local.hex --force` first"
+            )
+        }
+    };
+
+    Some(Diagnostic {
+        severity: Severity::Warning,
+        code: "SV014".into(),
+        message: format!("dependencies not installed for {location} (mix)"),
         location: location.to_string(),
         hint: Some(hint),
     })

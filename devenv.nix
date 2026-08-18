@@ -11,7 +11,19 @@ let
     # Claude Code may run outside the devenv shell: bootstrap PATH from the
     # devenv profile so cargo/rustc/bun are found either way.
     export PATH="$ROOT/.devenv/profile/bin:$PATH"
-    if command -v sccache >/dev/null; then export RUSTC_WRAPPER=sccache; fi
+    if command -v sccache >/dev/null; then
+      # A long-running sccache server keeps the env it was started with; a
+      # stale one can no longer find clang via xcrun and fails every C build
+      # script (ring/openssl-sys/libz-sys). Probe a real compile through
+      # sccache and restart the server with this hook's env if it fails.
+      probe() { echo 'int main(void){return 0;}' > "$1/probe.c" && sccache cc -c "$1/probe.c" -o "$1/probe.o" >/dev/null 2>&1; }
+      P=$(mktemp -d)
+      if ! probe "$P"; then
+        sccache --stop-server >/dev/null 2>&1 || true
+      fi
+      if probe "$P"; then export RUSTC_WRAPPER=sccache; fi
+      rm -rf "$P"
+    fi
     D=$(mktemp -d)
     trap 'rm -rf "$D"' EXIT
 

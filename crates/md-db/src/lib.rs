@@ -15,6 +15,8 @@ pub mod cache;
 pub mod coverage;
 /// Dependabot ecosystem detection and coverage checks.
 pub mod dependabot;
+/// Start/stop devenv-managed services around service checks.
+pub mod devenv;
 /// Structural diff between two document versions.
 #[allow(missing_docs)]
 pub mod diff;
