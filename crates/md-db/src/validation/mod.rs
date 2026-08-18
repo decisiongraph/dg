@@ -1807,6 +1807,65 @@ type "doc" {
     }
 
     #[test]
+    fn code_paths_key_is_deprecated_error() {
+        let schema = Schema::from_str(
+            r#"
+type "doc" {
+    field "title" type="string"
+}
+"#,
+        )
+        .unwrap();
+        let doc = Document::from_str(
+            "---\ntype: doc\ntitle: T\ncode_paths:\n  - src/main.rs\n---\n\n# T\n",
+        )
+        .unwrap();
+        let result = validate_document(&doc, &schema, &HashSet::new(), &HashSet::new(), None);
+        let f023 = result
+            .diagnostics
+            .iter()
+            .find(|d| d.code == "F023")
+            .expect("code_paths must produce F023");
+        assert_eq!(f023.severity, Severity::Error);
+        assert_eq!(f023.location, "frontmatter.code_paths");
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "F020" && d.location == "frontmatter.code_paths"),
+            "code_paths must not also be F020: {:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
+    fn schema_defined_code_paths_field_is_not_deprecated() {
+        let schema = Schema::from_str(
+            r#"
+type "doc" {
+    field "title" type="string"
+    field "code_paths" type="string[]"
+}
+"#,
+        )
+        .unwrap();
+        let doc = Document::from_str(
+            "---\ntype: doc\ntitle: T\ncode_paths:\n  - src/main.rs\n---\n\n# T\n",
+        )
+        .unwrap();
+        let result = validate_document(&doc, &schema, &HashSet::new(), &HashSet::new(), None);
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| (d.code == "F023" || d.code == "F020")
+                    && d.location == "frontmatter.code_paths"),
+            "schema-defined code_paths must be accepted: {:?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
     #[cfg(feature = "diagrams")]
     fn nested_section_diagram_validated_once() {
         // Parent section content includes child sections, so without dedup the

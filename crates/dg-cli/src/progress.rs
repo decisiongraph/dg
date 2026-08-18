@@ -25,6 +25,24 @@ pub fn stderr_sink() -> Option<Arc<dyn ProgressSink>> {
     }
 }
 
+/// Interactive confirmation for installs that may execute dependency
+/// scripts (npm/yarn). `None` when stdin/stderr are not TTYs, so CI and
+/// piped runs never hang on a prompt.
+pub fn install_confirm() -> Option<md_db::toolchain::ConfirmFn> {
+    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+        return None;
+    }
+    Some(Arc::new(|message: &str| {
+        eprint!("dg: {message} [y/N] ");
+        let _ = std::io::stderr().flush();
+        let mut line = String::new();
+        if std::io::stdin().read_line(&mut line).is_err() {
+            return false;
+        }
+        matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+    }))
+}
+
 const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const TICK: Duration = Duration::from_millis(100);
 
