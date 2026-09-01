@@ -1,4 +1,5 @@
 mod commands;
+mod document_hooks;
 mod progress;
 
 use std::path::{Path, PathBuf};
@@ -139,6 +140,18 @@ fn run() -> Result<()> {
     let mut cache =
         md_db::cache::DocCache::load(&cache_path).unwrap_or_else(|_| md_db::cache::DocCache::new());
 
+    let document_snapshot = if document_hooks::command_may_change_documents(&cli.command) {
+        match document_hooks::capture(&root) {
+            Ok(snapshot) => Some(snapshot),
+            Err(error) => {
+                eprintln!("warning: failed to snapshot documents for hooks: {error}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     let result = match cli.command {
         Command::Init { .. }
         | Command::Guide(_)
@@ -179,6 +192,16 @@ fn run() -> Result<()> {
         Command::Schema(args) => commands::schema_cmd::run(&root, &schema, &args),
         Command::History(args) => commands::history::run(&root, &schema, &args),
     };
+
+    // Notify external document hooks after command-side mutations.
+    if let Some(before) = document_snapshot {
+        match document_hooks::capture(&root) {
+            Ok(after) => document_hooks::dispatch(&root, &schema, &before, &after),
+            Err(error) => {
+                eprintln!("warning: failed to snapshot documents after mutation: {error}");
+            }
+        }
+    }
 
     // Save cache if modified
     if cache.is_dirty() {

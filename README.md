@@ -195,6 +195,19 @@ dg coverage                          # Coverage metrics by type/status
 dg team list                         # Show orgs, teams, users
 ```
 
+## External document hooks
+
+Executable scripts in `.dg/hooks/on_create`, `.dg/hooks/on_update`, and
+`.dg/hooks/on_delete` receive document notifications from CLI mutations. Each
+script is invoked from the project root with `<document-id> <event-type>`
+arguments. Create and delete hooks receive the affected document JSON on
+stdin; delete receives the document as it existed before removal.
+
+Update hooks receive an object containing `before`, `after`, and `diff`, where
+`diff` uses the same `field_changes` and `section_changes` structure as
+`dg diff`. Hook failures are reported as warnings and do not roll back or
+fail the document mutation.
+
 ## Field assignment rules
 
 `dg set` and `dg new` use `=` to set scalar fields and `+=` to append to arrays:

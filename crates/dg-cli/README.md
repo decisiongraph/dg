@@ -24,12 +24,20 @@ dg new opp --title "..."   # Create a business opportunity
 dg new pol --title "..."   # Create a policy/constraint
 dg new adr --title "..."   # Create an architecture decision
 dg new inc --title "..."   # Create an incident report
-
 dg delete <id>              # Delete a document
+
 dg list                    # List all documents
 dg show <id>               # Show a document
 dg refs <id>               # Show references from/to a document
 ```
+
+### External Document Hooks
+
+Executable `.dg/hooks/on_create`, `.dg/hooks/on_update`, and
+`.dg/hooks/on_delete` scripts run after CLI document mutations. They receive
+`<document-id> <event-type>` arguments and document JSON on stdin. Update
+payloads contain `before`, `after`, and a structured `diff`. Hook failures
+only emit warnings.
 
 ### Validation
 
