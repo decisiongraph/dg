@@ -155,6 +155,7 @@ fn run() -> Result<()> {
             commands::site::run(&root, &schema, users.as_ref(), &args, &mut cache)
         }
         Command::New(args) => commands::new::run(&root, &schema, &args, &mut cache, users.as_ref()),
+        Command::Delete(args) => commands::delete::run(&root, &schema, &args),
         Command::List(args) => commands::list::run(&root, &schema, &args, users.as_ref()),
         Command::Show(args) => commands::show::run(&root, &schema, &args, &mut cache),
         Command::Refs(args) => commands::refs::run(&root, &schema, &args, &mut cache),

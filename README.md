@@ -126,6 +126,9 @@ dg set OPP-001 --section Decision --content-file notes.md  # Read from file
 dg set OPP-001 --section Timeline --add-row "10:30,Restored,@ops"
 dg set OPP-001 --remove tags                      # Remove a field
 
+# Delete
+dg delete OPP-001
+
 # Validate & lint
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes

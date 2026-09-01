@@ -25,6 +25,7 @@ dg new pol --title "..."   # Create a policy/constraint
 dg new adr --title "..."   # Create an architecture decision
 dg new inc --title "..."   # Create an incident report
 
+dg delete <id>              # Delete a document
 dg list                    # List all documents
 dg show <id>               # Show a document
 dg refs <id>               # Show references from/to a document
