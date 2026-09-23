@@ -54,7 +54,7 @@
         cargoBuildFlags = [ "--package" "dg-cli" "--package" "dg-mcp" ];
         # git2 pulls in vendored-openssl, whose build scripts need perl
         nativeBuildInputs = [ pkgs.perl ];
-        buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+        buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
         # The SPA is prebuilt as its own derivation; skip build.rs's bun step
         # and drop the result where rust-embed expects it (same trick as release.yml).
         DG_SKIP_UI_BUILD = "1";
