@@ -32,17 +32,36 @@ jobs:
         run: cargo test --locked --workspace
 
   nix:
-    name: Nix flake
-    runs-on: ubuntu-latest
+    name: Nix flake (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: DeterminateSystems/nix-installer-action@v16
 
+      # Pulls from decisiongraph.cachix.org; pushes built paths when the
+      # CACHIX_AUTH_TOKEN secret is available (not on fork PRs).
+      - uses: cachix/cachix-action@v16
+        with:
+          name: decisiongraph
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
       - name: Flake check (evaluates all systems)
+        if: matrix.system == 'x86_64-linux'
         run: nix flake check --all-systems
 
       - name: Assert ui/bun.nix is in sync with ui/bun.lock
+        if: matrix.system == 'x86_64-linux'
         run: |
           nix run .#bun2nix -- -l ui/bun.lock -o /tmp/bun.nix
           diff -u ui/bun.nix /tmp/bun.nix

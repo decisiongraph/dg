@@ -24,6 +24,21 @@ nix run github:decisiongraph/dg -- --version   # run without installing
 nix profile install github:decisiongraph/dg    # install to profile
 ```
 
+Prebuilt binaries for `x86_64-linux`, `aarch64-linux` and `aarch64-darwin` are
+in the [decisiongraph cachix](https://decisiongraph.cachix.org). The flake's
+`nixConfig` offers it automatically (accept the prompt, or pass
+`--accept-flake-config`). To trust it permanently:
+
+```bash
+cachix use decisiongraph
+# or add to nix.conf:
+# extra-substituters = https://decisiongraph.cachix.org
+# extra-trusted-public-keys = decisiongraph.cachix.org-1:JOB7apbljVw8J/Y45shm7Aa4+EkkvD7gs7BjhBv/zow=
+```
+
+Cache hits require the flake's own pinned `nixpkgs`; overriding it with
+`inputs.nixpkgs.follows` (as below) changes the hash and builds from source.
+
 To use in a [devenv](https://devenv.sh) project, add the input to `devenv.yaml`:
 
 ```yaml
