@@ -764,3 +764,33 @@ status: exploring
         std::fs::remove_dir_all(&dir).ok();
     }
 }
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use crate::document::Document;
+    use crate::schema::Schema;
+
+    /// `dg new` output and later `dg set` edits must pass `dg fmt --check`.
+    #[test]
+    fn test_generated_and_edited_docs_need_no_format() {
+        let schema = Schema::from_str(include_str!("../../../tests/fixtures/schema.kdl")).unwrap();
+        let td = schema.get_type("adr").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join(td.folder.as_deref().unwrap_or("docs"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("adr-001-x.md");
+
+        let fields = [("author".to_string(), "alice".to_string())];
+        let content = crate::template::generate_document_opts(td, &schema, &fields, &[], true);
+        assert!(!content.contains("tags: []"));
+        std::fs::write(&path, &content).unwrap();
+        assert!(format_file(&path, &schema, true).unwrap().is_empty());
+
+        let mut doc = Document::from_file(&path).unwrap();
+        doc.set_field_from_str("status", "accepted");
+        doc.apply_frontmatter_layout(td, &schema);
+        doc.save().unwrap();
+        assert!(format_file(&path, &schema, true).unwrap().is_empty());
+    }
+}

@@ -306,6 +306,7 @@ fn tool_set(args: &Value) -> Result<Value> {
     let file = require_str(args, "file")?;
     let dry_run = bool_arg(args, "dry_run");
     let mut doc = Document::from_file(PathBuf::from(&file))?;
+    let original = doc.raw.clone();
 
     for field_str in str_array_arg(args, "fields") {
         if let Some((k, v)) = field_str.split_once("+=") {
@@ -342,6 +343,15 @@ fn tool_set(args: &Value) -> Result<Value> {
                     row_str.split(',').map(|s| s.trim().to_string()).collect();
                 doc.add_table_row(&heading, table_idx, values)?;
             }
+        }
+    }
+
+    // Keep frontmatter in `dg fmt` layout so set + fmt --check agree
+    if doc.raw != original {
+        let schema = load_schema(args)?;
+        let doc_id = path_to_id(&PathBuf::from(&file));
+        if let Some(td) = schema.get_type_for_doc_id(&doc_id) {
+            doc.apply_frontmatter_layout(td, &schema);
         }
     }
 
@@ -443,6 +453,7 @@ fn tool_new(args: &Value) -> Result<Value> {
             .with_context(|| format!("invalid section-set: {ss}"))?;
         doc.replace_section_content(heading.trim(), content)?;
     }
+    doc.apply_frontmatter_layout(type_def, &schema);
 
     let final_content = &doc.raw;
 

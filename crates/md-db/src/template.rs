@@ -63,7 +63,7 @@ pub fn generate_document_opts(
     let fm = Frontmatter::from_data(data);
     let mut out = String::new();
     out.push_str("---\n");
-    out.push_str(&fm.to_yaml_string());
+    out.push_str(&fm.to_grouped_yaml(type_def, schema));
     out.push_str("---\n");
 
     // H1 title from override or placeholder
