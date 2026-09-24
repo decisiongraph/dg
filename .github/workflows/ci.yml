@@ -18,6 +18,13 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Cache bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Assert Cargo.lock is in sync with Cargo.toml
         run: cargo metadata --locked --format-version 1 > /dev/null
 
@@ -47,11 +54,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/nix-installer-action@v23
 
       # Pulls from decisiongraph.cachix.org; pushes built paths when the
       # CACHIX_AUTH_TOKEN secret is available (not on fork PRs).
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v17
         with:
           name: decisiongraph
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
