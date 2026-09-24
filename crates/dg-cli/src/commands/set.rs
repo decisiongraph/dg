@@ -116,7 +116,7 @@ pub fn run(root: &Path, schema: &Schema, args: &SetArgs, org: Option<&OrgConfig>
     // Section operations (require --section)
     if let Some(ref heading) = args.section {
         if let Some(ref text) = content_text {
-            doc.replace_section_content(heading, &format!("{text}\n"))?;
+            doc.replace_section_content(heading, text)?;
             eprintln!("{doc_id}: replaced section \"{heading}\"");
         }
         if let Some(ref text) = args.append {

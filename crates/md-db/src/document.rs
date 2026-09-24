@@ -371,9 +371,21 @@ impl Document {
     }
 
     /// Replace the content of a section (everything between heading and next heading).
+    ///
+    /// Normalizes layout to match `dg new`: blank line after the heading and
+    /// one blank line before the next heading.
     pub fn replace_section_content(&mut self, heading: &str, new_content: &str) -> Result<()> {
         let range = self.section_content_range(heading)?;
-        self.replace_body_range(range, new_content);
+        let content = new_content.trim_start_matches(['\n', '\r']).trim_end();
+        let mut new = String::from("\n");
+        if !content.is_empty() {
+            new.push_str(content);
+            new.push('\n');
+            if range.end < self.body.len() {
+                new.push('\n');
+            }
+        }
+        self.replace_body_range(range, &new);
         Ok(())
     }
 
@@ -765,6 +777,23 @@ Bad things.
         let section = doc.get_section("Decision").unwrap();
         assert!(section.content.contains("New decision text"));
         assert!(!section.content.contains("PostgreSQL"));
+    }
+
+    #[test]
+    fn test_replace_section_content_keeps_blank_lines() {
+        let src = "---\ntitle: T\n---\n\n## Context\n\n<!-- hint -->\n\n## Decision\n\nX.\n";
+        for input in ["New.\n", "New.\n\n", "\nNew.\n", "New."] {
+            let mut doc = Document::from_str(src).unwrap();
+            doc.replace_section_content("Context", input).unwrap();
+            assert_eq!(
+                doc.body, "\n## Context\n\nNew.\n\n## Decision\n\nX.\n",
+                "input {input:?}"
+            );
+        }
+        // Last section: no trailing blank line
+        let mut doc = Document::from_str(src).unwrap();
+        doc.replace_section_content("Decision", "Y.\n").unwrap();
+        assert!(doc.body.ends_with("## Decision\n\nY.\n"));
     }
 
     #[test]

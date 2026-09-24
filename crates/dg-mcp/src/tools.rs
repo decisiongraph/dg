@@ -321,12 +321,12 @@ fn tool_set(args: &Value) -> Result<Value> {
         let (heading, content) = ss
             .split_once('=')
             .with_context(|| format!("invalid section-set: {ss}"))?;
-        doc.replace_section_content(heading.trim(), &format!("\n{}\n", content.trim()))?;
+        doc.replace_section_content(heading.trim(), content)?;
     }
 
     if let Some(heading) = str_arg(args, "section") {
         if let Some(content) = str_arg(args, "content") {
-            doc.replace_section_content(&heading, &format!("{content}\n"))?;
+            doc.replace_section_content(&heading, &content)?;
         }
         if let Some(text) = str_arg(args, "append") {
             doc.append_to_section(&heading, &text)?;
@@ -441,7 +441,7 @@ fn tool_new(args: &Value) -> Result<Value> {
         let (heading, content) = ss
             .split_once('=')
             .with_context(|| format!("invalid section-set: {ss}"))?;
-        doc.replace_section_content(heading.trim(), &format!("\n{}\n", content.trim()))?;
+        doc.replace_section_content(heading.trim(), content)?;
     }
 
     let final_content = &doc.raw;
