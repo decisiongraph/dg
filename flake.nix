@@ -53,7 +53,13 @@
       mkDg = pkgs: pkgs.rustPlatform.buildRustPackage {
         pname = "dg";
         inherit version;
-        src = self;
+        # Only what cargo needs: docs/CI edits then keep the cachix hit, and
+        # example/services gitlinks (hashed differently on GitHub runners)
+        # stay out of the store path.
+        src = pkgs.lib.fileset.toSource {
+          root = ./.;
+          fileset = pkgs.lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./crates ];
+        };
         cargoLock = {
           lockFile = ./Cargo.lock;
           # graphs-tui comes from a git branch via [patch.crates-io]
@@ -68,6 +74,7 @@
         # and drop the result where rust-embed expects it (same trick as release.yml).
         DG_SKIP_UI_BUILD = "1";
         postPatch = ''
+          mkdir -p ui
           cp -r ${mkUi pkgs} ui/build
           chmod -R u+w ui/build
         '';
