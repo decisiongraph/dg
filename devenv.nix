@@ -83,6 +83,12 @@ in
   languages.rust.enable = true;
   languages.rust.channel = "stable";
 
+  # bun builds the SvelteKit UI (ui/)
+  languages.javascript = {
+    enable = true;
+    bun.enable = true;
+  };
+
   # Additional packages
   packages = with pkgs; [
     graphviz # For DOT graph visualization
@@ -213,6 +219,11 @@ in
       pass_filenames = false;
     };
   };
+
+  # devenv 2.3 pulls enterTest (and so every git hook incl. clippy) into
+  # each `devenv shell`. Detach until upstream fixes it; hooks still run on
+  # git commit. https://github.com/cachix/devenv/issues/3184
+  tasks."devenv:git-hooks:run".before = lib.mkForce [ ];
 
   # Scripts
   scripts = {

@@ -12,10 +12,23 @@ jobs:
   test:
     name: Rust + e2e tests
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+    defaults:
+      run:
+        shell: devenv shell bash -- -e {0}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+
+      # RUSTC_WRAPPER=sccache comes from devenv.nix; this points it at the
+      # GitHub Actions cache backend.
+      - uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache bun packages
         uses: actions/cache@v6
@@ -24,13 +37,17 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Build devenv shell
+        shell: bash
+        run: devenv shell true
 
       - name: Build UI
-        working-directory: ui
         run: |
+          cd ui
           bun install --frozen-lockfile
           bun run build
 
@@ -49,18 +66,15 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        working-directory: ui
-        run: bunx playwright install --with-deps chromium
+        run: cd ui && bunx playwright install --with-deps chromium
 
       # Browsers restored from cache still need the apt system deps
       - name: Install Playwright system deps
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        working-directory: ui
-        run: bunx playwright install-deps chromium
+        run: cd ui && bunx playwright install-deps chromium
 
       - name: e2e tests
-        working-directory: ui
-        run: bun run test:e2e
+        run: cd ui && bun run test:e2e
 
       - name: Upload Playwright traces on failure
         if: failure()

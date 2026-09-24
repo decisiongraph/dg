@@ -9,14 +9,23 @@ jobs:
   test:
     name: Cargo tests
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+    defaults:
+      run:
+        shell: devenv shell bash -- -e {0}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: cachix/install-nix-action@v31
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
 
-      - uses: oven-sh/setup-bun@v2
+      # RUSTC_WRAPPER=sccache comes from devenv.nix; this points it at the
+      # GitHub Actions cache backend.
+      - uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache bun packages
         uses: actions/cache@v6
@@ -24,6 +33,14 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
+
+      - name: Build devenv shell
+        shell: bash
+        run: devenv shell true
 
       - name: Assert Cargo.lock is in sync with Cargo.toml
         run: cargo metadata --locked --format-version 1 > /dev/null
@@ -54,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: cachix/install-nix-action@v31
 
       # Pulls from decisiongraph.cachix.org; pushes built paths when the
       # CACHIX_AUTH_TOKEN secret is available (not on fork PRs).
