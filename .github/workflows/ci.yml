@@ -96,6 +96,15 @@ jobs:
           nix run .#bun2nix -- -l ui/bun.lock -o /tmp/bun.nix
           diff -u ui/bun.nix /tmp/bun.nix
 
+      - name: DEBUG drv
+        run: |
+          git status --short | head
+          nix eval --raw .#dg.src.outPath; echo
+          nix eval --raw .#dg.drvPath; echo
+          nix eval --raw "github:decisiongraph/dg/$GITHUB_SHA#dg.outPath"; echo
+          nix derivation show .#dg | jq -c '.derivations[]|{srcs:.inputs.srcs, env:(.env|with_entries(select(.value|length<200)))}'
+          nix config show | grep -vE "^(access-tokens|netrc)" | grep -vE " = $" | head -80
+
       - name: Build package
         run: nix build .#dg --print-build-logs
 
