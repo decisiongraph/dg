@@ -98,13 +98,11 @@ jobs:
 
       - name: DEBUG drv
         run: |
-          nix flake metadata . | head -8
-          A=$(nix eval --raw .#dg.src.outPath)
-          B=$(nix eval --raw "github:decisiongraph/dg/$GITHUB_SHA#dg.src.outPath")
-          nix build --no-link "github:decisiongraph/dg/$GITHUB_SHA#dg.src" 2>/dev/null || nix flake archive "github:decisiongraph/dg/$GITHUB_SHA" >/dev/null
-          echo "$A vs $B"
-          diff -rq "$A" "$B" | head -30 || true
-          git ls-files -s | awk '$1=="160000"'
+          S=$(nix eval --raw "github:decisiongraph/dg/$GITHUB_SHA#dg.src.outPath")
+          echo "$S"; nix path-info --json "$S" | jq -r '.. | .narHash? // empty'
+          cd "$S"; find . | LC_ALL=C sort | sha256sum; find . -type f | wc -l; find . -type d -empty; find . -type l
+          find . -type f -exec sha256sum {} + | LC_ALL=C sort -k2 > /tmp/ci-files.txt; sha256sum /tmp/ci-files.txt
+          find . -type f -perm -u+x | LC_ALL=C sort
 
       - name: Build package
         run: nix build .#dg --print-build-logs
