@@ -1,4 +1,4 @@
-Use Rust for all tools built here. Read `objective.md` for project goals.
+Use Rust for all tools built here. Read `README.md` for the project overview.
 
 ## External repos
 
@@ -64,17 +64,17 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 - `RuleDef { when_field, when_equals, then_required, then_section_table }` (conditional)
 
 **Ripple effects of schema changes:**
-- `md-db/src/validation.rs` — Validates docs against schema (diagnostic codes: F0xx frontmatter, S0xx structure, C0xx content, R0xx refs, L0xx preamble, SG0xx singletons)
+- `md-db/src/validation/` — Validates docs against schema (diagnostic codes: F0xx frontmatter, S0xx structure, C0xx content, R0xx refs, L0xx preamble, SG0xx singletons)
 - `md-db/src/template.rs` — `generate_document()` creates new docs from schema definition
 - `md-db/src/suggest.rs` — Uses schema for optional section/diagram checks
-- `md-db/src/site/pages.rs` — Type map hardcoded: `[("adr","architecture"), ("opp","opportunities"), ("pol","policies"), ("inc","incidents"), ("spec","specifications")]`
+- `md-db/src/site/data.rs` — Builds document type metadata from the schema for the SPA
 - `md-db/src/site/nav.rs` — Nav tree built from type groups
 - `dg-mcp/src/tools.rs` — `dg-describe` exposes schema to AI agents
 - `dg-schemas/` — Template skills reference type names
 
 ### Changing validation logic
 
-- `md-db/src/validation.rs` — Main validation engine. Entry: `validate_document()`, `validate_directory()`
+- `md-db/src/validation/` — Main validation engine. Entry: `validate_document()`, `validate_directory()`
 - `md-db/src/schema.rs` — Schema rules (conditional `when`/`then`, cardinality)
 - `md-db/src/graph.rs` — `find_dangling_refs()`, `find_cycles()`, `find_orphans()` for graph-level checks
 - `dg-cli/src/commands/validate.rs` — CLI wrapper
@@ -95,7 +95,7 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 3. Dispatch to command handler
 4. Save cache if dirty
 
-**Commands:** init, new, list, show, refs, validate, suggest, coverage, fmt, lint, guide, claude, gemini, opencode, hooks, export, site, set, renumber, team, roadmap
+**Commands:** See `dg --help` or the `Command` enum in `dg-cli/src/commands/mod.rs` for the current list.
 
 ### Changing MCP server tools
 
@@ -129,7 +129,6 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 
 - `md-db/src/roadmap.rs` — `build_roadmap()` scans OPP docs, groups by quarter. `render_roadmap_html()` generates standalone HTML. `Quarter` type with `from_date()`, `offset()`, `label()`.
 - `md-db/src/history.rs` — `collect_status_history()` for git-based status transitions (feature-gated: `git`)
-- `dg-cli/src/commands/roadmap.rs` — Standalone roadmap command
 - `dg-cli/src/commands/site.rs` — `build_roadmap_html()` helper used by both `dg site` and `dg export --site`
 
 ### Changing markdown rendering (terminal)

@@ -544,7 +544,7 @@
 	}
 
 	/** Combined action: all enrichments + syntax highlighting + math rendering */
-	function enrichHtml(el: HTMLElement, content: string) {
+	function enrichHtml(el: HTMLElement) {
 		collapseDevSections(el);
 		enrichContentRefs(el);
 		enrichExistingDocLinks(el);
@@ -630,7 +630,6 @@
 	}
 
 	function d2ErrorHtml(msg: string, source: string): string {
-		const retryId = `d2-retry-${Math.random().toString(36).slice(2, 9)}`;
 		return `<div class="space-y-3">
 			<div class="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-800 px-3 py-2">
 				<span class="text-red-500 text-sm leading-none mt-0.5">⚠</span>
@@ -693,7 +692,7 @@
 				</div>
 			{/key}
 		{:else}
-			<div use:enrichHtml={seg.content}>
+			<div use:enrichHtml>
 				{@html seg.content}
 			</div>
 		{/if}

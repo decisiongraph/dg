@@ -178,10 +178,14 @@ export function hideCard(immediate = false) {
 	}, 100);
 }
 
-function attachHoverListeners(node: HTMLElement) {
-	const triggers = node.querySelectorAll('.group\\/mention');
+const hoverTriggers = new WeakSet<HTMLElement>();
+
+export function attachHoverListeners(node: HTMLElement) {
+	const triggers = node.querySelectorAll<HTMLElement>('.group\\/mention');
 	for (const trigger of triggers) {
-		trigger.addEventListener('mouseenter', () => showCard(trigger as HTMLElement));
+		if (hoverTriggers.has(trigger)) continue;
+		hoverTriggers.add(trigger);
+		trigger.addEventListener('mouseenter', () => showCard(trigger));
 		trigger.addEventListener('mouseleave', () => hideCard());
 	}
 }
