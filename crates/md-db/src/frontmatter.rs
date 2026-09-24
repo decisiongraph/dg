@@ -49,7 +49,10 @@ impl Frontmatter {
             }
         };
 
-        Ok((Self { data }, result.content))
+        // gray_matter trims the content; keep the body verbatim so
+        // re-serialization preserves surrounding whitespace.
+        let body = body_after_frontmatter(raw).map_or(result.content, str::to_string);
+        Ok((Self { data }, body))
     }
 
     /// Try to parse frontmatter; returns (None, full_content) if no frontmatter found.
@@ -427,6 +430,24 @@ pub fn yaml_to_json(v: &Value) -> serde_json::Value {
     }
 }
 
+/// Return the raw text after the closing `---` delimiter line, untouched.
+fn body_after_frontmatter(raw: &str) -> Option<&str> {
+    let raw = raw.strip_prefix('\u{feff}').unwrap_or(raw);
+    let first_end = raw.find('\n')?;
+    if raw[..first_end].trim_end() != "---" {
+        return None;
+    }
+    let mut pos = first_end + 1;
+    while pos < raw.len() {
+        let line_end = raw[pos..].find('\n').map_or(raw.len(), |i| pos + i + 1);
+        if raw[pos..line_end].trim_end() == "---" {
+            return Some(&raw[line_end..]);
+        }
+        pos = line_end;
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,6 +459,13 @@ mod tests {
         assert_eq!(fm.get_display("title").unwrap(), "Test");
         assert_eq!(fm.get_display("status").unwrap(), "accepted");
         assert!(body.contains("# Body"));
+    }
+
+    #[test]
+    fn test_body_preserves_whitespace() {
+        let content = "---\ntitle: Test\n---\n\n# Body\n\nText.\n\n";
+        let (_, body) = Frontmatter::parse(content).unwrap();
+        assert_eq!(body, "\n# Body\n\nText.\n\n");
     }
 
     #[test]

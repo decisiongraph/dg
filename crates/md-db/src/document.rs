@@ -722,6 +722,16 @@ Bad things.
     }
 
     #[test]
+    fn test_set_field_preserves_body_whitespace() {
+        for body in ["\n# T\n\n### Negative\n\n", "\n# T\n\nBody.\n"] {
+            let content = format!("---\nstatus: proposed\n---\n{body}");
+            let mut doc = Document::from_str(&content).unwrap();
+            doc.set_field_from_str("status", "accepted");
+            assert_eq!(doc.raw, format!("---\nstatus: accepted\n---\n{body}"));
+        }
+    }
+
+    #[test]
     fn test_set_field_from_str() {
         let mut doc = Document::from_str(SAMPLE).unwrap();
         doc.set_field_from_str("status", "rejected");
