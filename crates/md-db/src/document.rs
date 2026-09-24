@@ -601,12 +601,45 @@ impl Document {
     pub(crate) fn rebuild_raw(&mut self) {
         let mut raw = String::new();
         if let Some(ref fm) = self.frontmatter {
-            raw.push_str("---\n");
-            raw.push_str(&fm.to_yaml_string());
-            raw.push_str("---\n");
+            match self.unchanged_frontmatter_block(fm) {
+                // Body-only edit: keep frontmatter text (order, grouping) verbatim
+                Some(block) => raw.push_str(block),
+                None => {
+                    raw.push_str("---\n");
+                    raw.push_str(&fm.to_yaml_string());
+                    raw.push_str("---\n");
+                }
+            }
         }
         raw.push_str(&self.body);
         self.raw = raw;
+    }
+
+    /// Current raw frontmatter block (incl. `---` delimiters) if it still
+    /// parses to the same data as `fm`.
+    fn unchanged_frontmatter_block(&self, fm: &Frontmatter) -> Option<&str> {
+        let (old, old_body) = Frontmatter::parse(&self.raw).ok()?;
+        if old.data() != fm.data() {
+            return None;
+        }
+        self.raw.strip_suffix(old_body.as_str())
+    }
+
+    /// Rewrite raw frontmatter in the canonical `dg fmt` layout (schema field
+    /// order, grouped, empty arrays omitted) so edits pass `dg fmt --check`.
+    pub fn apply_frontmatter_layout(
+        &mut self,
+        type_def: &crate::schema::TypeDef,
+        schema: &crate::schema::Schema,
+    ) {
+        let Some(ref fm) = self.frontmatter else {
+            return;
+        };
+        self.raw = format!(
+            "---\n{}---\n{}",
+            fm.to_grouped_yaml(type_def, schema),
+            self.body
+        );
     }
 
     /// Splice body string then rebuild_raw.
@@ -777,6 +810,17 @@ Bad things.
         let section = doc.get_section("Decision").unwrap();
         assert!(section.content.contains("New decision text"));
         assert!(!section.content.contains("PostgreSQL"));
+    }
+
+    #[test]
+    fn test_body_edit_keeps_frontmatter_text() {
+        let src = "---\nstatus: proposed\nauthor: alice\n\ntags:\n  - x\n---\n\n## A\n\nold\n";
+        let mut doc = Document::from_str(src).unwrap();
+        doc.replace_section_content("A", "new").unwrap();
+        assert!(doc
+            .raw
+            .starts_with("---\nstatus: proposed\nauthor: alice\n\ntags:\n  - x\n---\n"));
+        assert!(doc.raw.ends_with("## A\n\nnew\n"));
     }
 
     #[test]

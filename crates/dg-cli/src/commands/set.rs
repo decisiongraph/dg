@@ -130,6 +130,13 @@ pub fn run(root: &Path, schema: &Schema, args: &SetArgs, org: Option<&OrgConfig>
         }
     }
 
+    // Keep frontmatter in `dg fmt` layout so set + fmt --check agree
+    if doc.raw != original {
+        if let Some(td) = type_def {
+            doc.apply_frontmatter_layout(td, schema);
+        }
+    }
+
     if doc.raw == original {
         eprintln!("{doc_id}: no changes");
         return Ok(());
