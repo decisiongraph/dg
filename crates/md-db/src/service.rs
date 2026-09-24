@@ -90,8 +90,7 @@ enum OnefetchInfoField {
     Dependencies(OnefetchDependenciesWrapper),
     License(OnefetchLicenseWrapper),
     Size(OnefetchSizeWrapper),
-    #[allow(dead_code)]
-    Other(serde_json::Value),
+    Other(serde::de::IgnoredAny),
 }
 
 #[derive(Debug, Deserialize)]
@@ -2414,6 +2413,34 @@ pub fn check_dev_url(url: &str) -> bool {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_onefetch_ignores_unknown_fields() {
+        let output: OnefetchOutput = serde_json::from_str(
+            r#"{"infoFields": [
+                {"FutureInfo": {"nested": [1, "value", null]}},
+                {"LocInfo": {"linesOfCode": 42}},
+                {"LanguagesInfo": {"languagesWithPercentage": [
+                    {"language": "Rust", "percentage": 100.0}
+                ]}}
+            ]}"#,
+        )
+        .unwrap();
+
+        let fields = output.info_fields.unwrap();
+        assert!(matches!(fields[0], OnefetchInfoField::Other(_)));
+        let OnefetchInfoField::Loc(loc) = &fields[1] else {
+            panic!("expected line count after unknown field");
+        };
+        assert_eq!(loc.loc_info.lines_of_code, 42);
+        let OnefetchInfoField::Languages(languages) = &fields[2] else {
+            panic!("expected languages after unknown field");
+        };
+        assert_eq!(
+            languages.languages_info.languages_with_percentage[0].language,
+            "Rust"
+        );
+    }
 
     #[test]
     fn test_discover_service_readmes() {

@@ -2,15 +2,14 @@ import { get } from 'svelte/store';
 import { allDocs, docTypes } from '$lib/stores/docs';
 import { orgData } from '$lib/stores/org';
 import { siteMeta } from '$lib/stores/site-meta';
-import type { DocEntry, OrgData, TypeInfo } from '$lib/types';
+import type { DocEntry, TypeInfo } from '$lib/types';
 import {
 	buildMentionHtml,
 	buildTeamHtml,
 	buildOrgHtml,
 	buildUnknownRefHtml,
 	esc,
-	showCard,
-	hideCard
+	attachHoverListeners
 } from './user-mentions';
 
 /** Tags whose text children should not be enriched. */
@@ -68,32 +67,9 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 function buildDocHoverCard(doc: DocEntry, folder: string): string {
-	const statusStyle = STATUS_STYLES[doc.status?.toLowerCase()] ?? 'background:#f3f4f6;color:#6b7280;';
-	const statusBadge = doc.status
-		? `<span style="${statusStyle}border-radius:0.25rem;padding:0.125rem 0.375rem;font-size:0.625rem;font-weight:500;white-space:nowrap;">${esc(doc.status)}</span>`
-		: '';
-
-	const preview = doc.body_html ? firstSection(doc.body_html) : undefined;
-	const bodySnippet = preview?.body
-		? `<span class="text-xs text-muted-foreground leading-relaxed" style="display:block;">${preview.heading ? `<strong style="color:var(--foreground);opacity:0.8;">${esc(preview.heading)}:</strong> ` : ''}${esc(preview.body)}</span>`
-		: '';
-
-	const meta =
-		doc.author || doc.date
-			? `<span class="flex gap-2 text-[10px] text-muted-foreground pt-1" style="border-top:1px solid var(--border);">${doc.author ? `<span>@${esc(doc.author)}</span>` : ''}${doc.date ? `<span>${esc(doc.date)}</span>` : ''}</span>`
-			: '';
-
 	return `<a href="/${esc(folder)}/${esc(doc.id.toLowerCase())}" class="group/mention relative inline-flex items-center font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">
 		${esc(doc.id)}
-		<span class="user-hovercard" style="display:none;">
-			<span class="flex items-center gap-2">
-				<span class="font-mono text-xs text-muted-foreground">${esc(doc.id)}</span>
-				${statusBadge}
-			</span>
-			<span class="text-sm font-medium leading-tight">${esc(doc.title)}</span>
-			${bodySnippet}
-			${meta}
-		</span>
+		${buildHoverPopup(doc)}
 	</a>`;
 }
 
@@ -121,8 +97,6 @@ function process(node: HTMLElement) {
 	for (const d of docs) {
 		docMap.set(d.id.toUpperCase(), d);
 	}
-
-	const knownIds = new Set(docMap.keys());
 
 	// Build prefix regex from doc types + jira prefixes
 	const prefixes = new Set<string>();
@@ -281,13 +255,7 @@ function process(node: HTMLElement) {
 	}
 
 	// Attach floating hover card listeners to all doc ref links
-	const docRefLinks = node.querySelectorAll<HTMLElement>('.group\\/mention');
-	for (const trigger of docRefLinks) {
-		if ((trigger as any).__docRefHover) continue;
-		(trigger as any).__docRefHover = true;
-		trigger.addEventListener('mouseenter', () => showCard(trigger));
-		trigger.addEventListener('mouseleave', () => hideCard());
-	}
+	attachHoverListeners(node);
 }
 
 /**
@@ -367,8 +335,6 @@ export function enrichExistingDocLinks(node: HTMLElement) {
 		while (popup.firstChild) {
 			a.appendChild(popup.firstChild);
 		}
-
-		a.addEventListener('mouseenter', () => showCard(a));
-		a.addEventListener('mouseleave', () => hideCard());
 	}
+	attachHoverListeners(node);
 }
