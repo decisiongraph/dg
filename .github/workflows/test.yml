@@ -12,8 +12,6 @@ jobs:
   test:
     name: Rust + e2e tests
     runs-on: ubuntu-latest
-    env:
-      SCCACHE_GHA_ENABLED: "true"
     defaults:
       run:
         shell: devenv shell bash -- -e {0}
@@ -28,10 +26,6 @@ jobs:
           name: decisiongraph
           extraPullNames: devenv
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      # RUSTC_WRAPPER=sccache comes from devenv.nix; this points it at the
-      # GitHub Actions cache backend.
-      - uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache bun packages
         uses: actions/cache@v6
@@ -49,6 +43,13 @@ jobs:
       - name: Build devenv shell
         shell: bash
         run: devenv shell true
+
+      # rust-cache needs the devenv toolchain on PATH to compute its key
+      - name: Expose devenv profile
+        shell: bash
+        run: echo "$PWD/.devenv/profile/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build UI
         run: |
