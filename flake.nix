@@ -53,9 +53,34 @@
       mkDg = pkgs: pkgs.rustPlatform.buildRustPackage {
         pname = "dg";
         inherit version;
-        # Only what cargo needs: docs/CI edits then keep the cachix hit, and
-        # example/services gitlinks (hashed differently on GitHub runners)
-        # stay out of the store path.
+        # Do NOT use `src = self` here. Two reasons:
+        #
+        # 1. Cachix hits require CI and users to compute the *same* store
+        #    path. `self` is the whole repo, and the repo contains gitlinks
+        #    (submodule entries without a .gitmodules) under
+        #    example/services/{api,auth-service,data-platform}. Nix on the
+        #    GitHub Actions runners drops those as absent, while Nix on
+        #    macOS/other Linux keeps them as empty directories. File contents
+        #    were byte-identical, only those 3 empty dirs differed, yet that
+        #    was enough to change the source hash: CI pushed
+        #    /nix/store/9h2sgz…-dg while every user evaluated xr397k…-dg and
+        #    silently rebuilt from source (≈5 min) despite the cache.
+        #    Debugged in PR #30; see PR #31.
+        #
+        # 2. With `self`, any commit (README, docs, .github/…) produced a new
+        #    dg store path, so CI rebuilt and the cache missed even when no
+        #    Rust code changed.
+        #
+        # So the source is limited to what cargo actually reads. When adding
+        # a file that the release build needs outside crates/ (include_str!,
+        # build.rs, .cargo/config.toml, rust-toolchain.toml…), add it here or
+        # the nix build breaks. Test-only includes (e.g. tests/fixtures) are
+        # fine since doCheck = false.
+        #
+        # To verify cache parity after changing this: compare
+        # `nix eval --raw github:decisiongraph/dg/<rev>#packages.<system>.dg.outPath`
+        # locally with the path the "Nix flake" CI job builds/pushes, and
+        # check https://decisiongraph.cachix.org/<hash>.narinfo returns 200.
         src = pkgs.lib.fileset.toSource {
           root = ./.;
           fileset = pkgs.lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./crates ];
@@ -73,6 +98,8 @@
         # The SPA is prebuilt as its own derivation; skip build.rs's bun step
         # and drop the result where rust-embed expects it (same trick as release.yml).
         DG_SKIP_UI_BUILD = "1";
+        # ui/ is not part of `src` above (mkUi reads it separately), so create
+        # the dir before copying; md-db's rust-embed reads ../../ui/build.
         postPatch = ''
           mkdir -p ui
           cp -r ${mkUi pkgs} ui/build
