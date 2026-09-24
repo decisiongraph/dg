@@ -1,6 +1,15 @@
 {
   description = "Decision Graph — markdown-as-database CLI (dg) and MCP server (dg-mcp)";
 
+  # Prebuilt binaries, pushed by CI. Honored for trusted users, or after
+  # answering yes to the accept-flake-config prompt.
+  nixConfig = {
+    extra-substituters = [ "https://decisiongraph.cachix.org" ];
+    extra-trusted-public-keys = [
+      "decisiongraph.cachix.org-1:JOB7apbljVw8J/Y45shm7Aa4+EkkvD7gs7BjhBv/zow="
+    ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     bun2nix = {

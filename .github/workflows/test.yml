@@ -12,18 +12,48 @@ jobs:
   test:
     name: Rust + e2e tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: devenv shell bash -- -e {0}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: cachix/install-nix-action@v31
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Pushes the devenv shell closure too, so later runs only download it
+      - uses: cachix/cachix-action@v17
+        with:
+          name: decisiongraph
+          extraPullNames: devenv
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Cache bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      # FIXME: pinned to 2.2.x, same as devenv.yaml; 2.3 runs every git hook
+      # on each `devenv shell` (https://github.com/cachix/devenv/issues/3184)
+      - name: Install devenv
+        shell: bash
+        run: nix profile add github:cachix/devenv/v2.2.2
+
+      - name: Build devenv shell
+        shell: bash
+        run: devenv shell true
+
+      # rust-cache needs the devenv toolchain on PATH to compute its key
+      - name: Expose devenv profile
+        shell: bash
+        run: echo "$PWD/.devenv/profile/bin" >> "$GITHUB_PATH"
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build UI
-        working-directory: ui
         run: |
+          cd ui
           bun install --frozen-lockfile
           bun run build
 
@@ -33,13 +63,24 @@ jobs:
       - name: Rust tests
         run: DG_SKIP_UI_BUILD=1 cargo test --workspace
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+
       - name: Install Playwright browsers
-        working-directory: ui
-        run: bunx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: cd ui && bunx playwright install --with-deps chromium
+
+      # Browsers restored from cache still need the apt system deps
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: cd ui && bunx playwright install-deps chromium
 
       - name: e2e tests
-        working-directory: ui
-        run: bun run test:e2e
+        run: cd ui && bun run test:e2e
 
       - name: Upload Playwright traces on failure
         if: failure()

@@ -9,14 +9,44 @@ jobs:
   test:
     name: Cargo tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: devenv shell bash -- -e {0}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: cachix/install-nix-action@v31
+
+      # Pushes the devenv shell closure too, so later runs only download it
+      - uses: cachix/cachix-action@v17
+        with:
+          name: decisiongraph
+          extraPullNames: devenv
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Cache bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      # FIXME: pinned to 2.2.x, same as devenv.yaml; 2.3 runs every git hook
+      # on each `devenv shell` (https://github.com/cachix/devenv/issues/3184)
+      - name: Install devenv
+        shell: bash
+        run: nix profile add github:cachix/devenv/v2.2.2
+
+      - name: Build devenv shell
+        shell: bash
+        run: devenv shell true
+
+      # rust-cache needs the devenv toolchain on PATH to compute its key
+      - name: Expose devenv profile
+        shell: bash
+        run: echo "$PWD/.devenv/profile/bin" >> "$GITHUB_PATH"
 
       - uses: Swatinem/rust-cache@v2
-
-      - uses: oven-sh/setup-bun@v2
 
       - name: Assert Cargo.lock is in sync with Cargo.toml
         run: cargo metadata --locked --format-version 1 > /dev/null
@@ -32,17 +62,36 @@ jobs:
         run: cargo test --locked --workspace
 
   nix:
-    name: Nix flake
-    runs-on: ubuntu-latest
+    name: Nix flake (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: cachix/install-nix-action@v31
+
+      # Pulls from decisiongraph.cachix.org; pushes built paths when the
+      # CACHIX_AUTH_TOKEN secret is available (not on fork PRs).
+      - uses: cachix/cachix-action@v17
+        with:
+          name: decisiongraph
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Flake check (evaluates all systems)
+        if: matrix.system == 'x86_64-linux'
         run: nix flake check --all-systems
 
       - name: Assert ui/bun.nix is in sync with ui/bun.lock
+        if: matrix.system == 'x86_64-linux'
         run: |
           nix run .#bun2nix -- -l ui/bun.lock -o /tmp/bun.nix
           diff -u ui/bun.nix /tmp/bun.nix
