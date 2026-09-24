@@ -220,11 +220,6 @@ in
     };
   };
 
-  # devenv 2.3 pulls enterTest (and so every git hook incl. clippy) into
-  # each `devenv shell`. Detach until upstream fixes it; hooks still run on
-  # git commit. https://github.com/cachix/devenv/issues/3184
-  tasks."devenv:git-hooks:run".before = lib.mkForce [ ];
-
   # Scripts
   scripts = {
     build.exec = "cargo build";

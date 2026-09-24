@@ -37,9 +37,11 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      # FIXME: pinned to 2.2.x, same as devenv.yaml; 2.3 runs every git hook
+      # on each `devenv shell` (https://github.com/cachix/devenv/issues/3184)
       - name: Install devenv
         shell: bash
-        run: nix profile add nixpkgs#devenv
+        run: nix profile add github:cachix/devenv/v2.2.2
 
       - name: Build devenv shell
         shell: bash
