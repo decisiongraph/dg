@@ -83,6 +83,9 @@ in
   languages.rust.enable = true;
   languages.rust.channel = "stable";
 
+  # Prebuilt shell deps pushed by CI
+  cachix.pull = [ "decisiongraph" ];
+
   # bun builds the SvelteKit UI (ui/)
   languages.javascript = {
     enable = true;

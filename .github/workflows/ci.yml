@@ -19,9 +19,12 @@ jobs:
 
       - uses: cachix/install-nix-action@v31
 
+      # Pushes the devenv shell closure too, so later runs only download it
       - uses: cachix/cachix-action@v17
         with:
-          name: devenv
+          name: decisiongraph
+          extraPullNames: devenv
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       # RUSTC_WRAPPER=sccache comes from devenv.nix; this points it at the
       # GitHub Actions cache backend.
