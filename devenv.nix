@@ -228,7 +228,7 @@ in
     build.exec = "cargo build";
     release.exec = "cargo build --release";
     test.exec = "cargo test";
-    install.exec = "cargo install --path crates/dg-cli && cargo install --path crates/dg-mcp";
+    install.exec = "cargo install --path crates/dg-cli";
     clean.exec = "cargo clean && (cd $DEVENV_ROOT/cc-eval && cargo clean 2>/dev/null || true)";
     sweep.exec = "cargo sweep --time 30 && (cd $DEVENV_ROOT/cc-eval && cargo sweep --time 30 2>/dev/null || true)";
 

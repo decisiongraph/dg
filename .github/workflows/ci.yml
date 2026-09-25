@@ -102,4 +102,10 @@ jobs:
       - name: Smoke test binaries
         run: |
           ./result/bin/dg --version
-          test -x ./result/bin/dg-mcp
+
+      # Prebuilt release binaries (nix/dg-bin.nix): catches a bad
+      # release.json, tarball layout change or missing shared library
+      - name: Build and smoke test dg-bin
+        run: |
+          nix build .#dg-bin --print-build-logs --out-link result-bin
+          ./result-bin/bin/dg --version

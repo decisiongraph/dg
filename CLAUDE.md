@@ -7,13 +7,10 @@ Use Rust for all tools built here. Read `README.md` for the project overview.
 ## Workspace crates
 
 ### crates/md-db — Core library
-Markdown-as-database: YAML frontmatter parsing, KDL schema validation, document graph, discovery, search, diffing, migration, sync, export, suggestions, static site generation. Used by dg-cli and dg-mcp.
+Markdown-as-database: YAML frontmatter parsing, KDL schema validation, document graph, discovery, search, diffing, migration, sync, export, suggestions, static site generation. Used by dg-cli.
 
 ### crates/dg-cli — CLI binary (`dg`)
 User-facing CLI. Depends on md-db for all document operations, markdown-tui for terminal rendering.
-
-### crates/dg-mcp — MCP server (`dg-mcp`)
-JSON-RPC over stdio. 10 tools: dg-validate, dg-get, dg-list, dg-inspect, dg-describe, dg-set, dg-new, dg-refs, dg-graph, dg-deprecate.
 
 ### crates/dg-schemas — Built-in schemas & templates
 Embeds KDL schema, Claude/Gemini/OpenCode templates, org.kdl template via `include_str!`. Pure data crate. Exports `ALL_TEMPLATES`, `SCHEMA`, `CLAUDE_MD`, skill templates, etc.
@@ -69,7 +66,6 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 - `md-db/src/suggest.rs` — Uses schema for optional section/diagram checks
 - `md-db/src/site/data.rs` — Builds document type metadata from the schema for the SPA
 - `md-db/src/site/nav.rs` — Nav tree built from type groups
-- `dg-mcp/src/tools.rs` — `dg-describe` exposes schema to AI agents
 - `dg-schemas/` — Template skills reference type names
 
 ### Changing validation logic
@@ -79,7 +75,6 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 - `md-db/src/graph.rs` — `find_dangling_refs()`, `find_cycles()`, `find_orphans()` for graph-level checks
 - `dg-cli/src/commands/validate.rs` — CLI wrapper
 - `dg-cli/src/commands/lint.rs` — validate + graph health combined
-- `dg-mcp/src/tools.rs` — `dg-validate` tool
 
 ### Changing CLI commands
 
@@ -96,13 +91,6 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 4. Save cache if dirty
 
 **Commands:** See `dg --help` or the `Command` enum in `dg-cli/src/commands/mod.rs` for the current list.
-
-### Changing MCP server tools
-
-- `dg-mcp/src/main.rs` — JSON-RPC protocol loop (stdin/stdout)
-- `dg-mcp/src/tools.rs` — Tool implementations (one function per tool)
-- `dg-mcp/src/args.rs` — Shared arg extraction: `load_schema()`, `load_org_config()`, `normalize_id()`
-- `dg-mcp/src/schema_json.rs` — Schema → JSON serialization, `diagnostic_to_json()`
 
 ### Changing the document graph / references
 
@@ -170,15 +158,13 @@ let root = ast_util::parse_md(&arena, &self.body);
 ```
 
 ### Error handling
-- `anyhow::Result` + `?` + `.context()` in binaries (dg-cli, dg-mcp). Never `.map_err(|e| e.to_string())`.
+- `anyhow::Result` + `?` + `.context()` in binaries (dg-cli). Never `.map_err(|e| e.to_string())`.
 - `thiserror` enums in libraries (md-db). Never `unwrap_or_default()` on serialization.
 - Never `std::process::exit()` in command handlers — return `Err`, let `main()` handle exit codes.
 - Never `Regex::new().unwrap()` — use `?` or `LazyLock` with graceful fallback.
 
 ### DRY helpers
 - Extract shared logic when a pattern repeats 2+ times.
-  - `dg-mcp/args.rs`: `load_schema()`, `load_org_config()`, `normalize_id()`
-  - `dg-mcp/schema_json.rs`: `diagnostic_to_json()`
   - `dg-cli/refs.rs`: `resolve_edges()`, `peer_id()`, `node_title()`
   - `dg-cli/site.rs`: `resolve_title()`, `build_roadmap_html()` (shared with export.rs)
 - For sorting by frontmatter fields, use `sort_by_field()` in list.rs.
@@ -193,5 +179,5 @@ Never add `libc` as a dependency without explicit user permission.
 - Zero clippy warnings policy.
 
 ### Module structure
-- Binary crates over ~300 lines split into modules. dg-mcp: `main.rs` (protocol), `args.rs`, `tools.rs`, `schema_json.rs`.
+- Binary crates over ~300 lines split into modules.
 - Platform-specific code in a single helper function.

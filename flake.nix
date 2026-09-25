@@ -1,5 +1,5 @@
 {
-  description = "Decision Graph — markdown-as-database CLI (dg) and MCP server (dg-mcp)";
+  description = "Decision Graph — markdown-as-database CLI (dg)";
 
   # Prebuilt binaries, pushed by CI. Honored for trusted users, or after
   # answering yes to the accept-flake-config prompt.
@@ -90,8 +90,8 @@
           # graphs-tui comes from a git branch via [patch.crates-io]
           allowBuiltinFetchGit = true;
         };
-        # Only ship the user-facing binaries, not workspace demo bins
-        cargoBuildFlags = [ "--package" "dg-cli" "--package" "dg-mcp" ];
+        # Only ship the user-facing binary, not workspace demo bins
+        cargoBuildFlags = [ "--package" "dg-cli" ];
         # git2 pulls in vendored-openssl, whose build scripts need perl
         nativeBuildInputs = [ pkgs.perl ];
         buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.libiconv ];
@@ -108,7 +108,7 @@
         # Tests run in CI; skip them here to keep consumer installs fast
         doCheck = false;
         meta = {
-          description = "Decision Graph — markdown-as-database CLI and MCP server";
+          description = "Decision Graph — markdown-as-database CLI";
           homepage = "https://github.com/decisiongraph/dg";
           mainProgram = "dg";
         };
@@ -121,6 +121,8 @@
 
       packages = forAllSystems (pkgs: {
         dg = pkgs.dg;
+        # Latest release binaries: no compile, cheap to evaluate
+        dg-bin = pkgs.callPackage ./nix/dg-bin.nix { };
         dg-ui = mkUi pkgs;
         # Pinned bun2nix CLI so `nix run .#bun2nix` regenerates ui/bun.nix
         # with the same version CI checks against.

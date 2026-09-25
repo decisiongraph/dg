@@ -38,6 +38,13 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             use_cross: true
+          # Fully static, no glibc needed (Alpine, scratch containers, old distros)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
           - target: aarch64-apple-darwin
@@ -55,6 +62,12 @@ jobs:
           targets: ${{ matrix.target }}
 
       - uses: oven-sh/setup-bun@v2
+
+      # libz-sys otherwise links the runner's libz.so.1 dynamically on native
+      # builds but bundles it under cross, so Linux tarballs differed (#34)
+      - name: Link zlib statically (Linux)
+        if: runner.os == 'Linux'
+        run: echo "LIBZ_SYS_STATIC=1" >> "$GITHUB_ENV"
 
       - name: Install cross
         if: matrix.use_cross
@@ -78,11 +91,29 @@ jobs:
         if: matrix.use_cross
         env:
           DG_SKIP_UI_BUILD: "1"
-        run: cross build --release --locked --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+        run: cross build --release --locked --target ${{ matrix.target }} -p dg-cli
 
       - name: Build (cargo)
         if: ${{ !matrix.use_cross }}
-        run: cargo build --release --locked --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+        run: cargo build --release --locked --target ${{ matrix.target }} -p dg-cli
+
+      - name: Verify Linux linkage
+        if: runner.os == 'Linux'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          for bin in dg; do
+            f="target/${TARGET}/release/${bin}"
+            needed="$(readelf -d "$f" | grep NEEDED || true)"
+            echo "${bin}: ${needed:-<none>}"
+            if grep -q libz <<<"$needed"; then
+              echo "::error::${bin} links libz dynamically"; exit 1
+            fi
+            if [[ "${TARGET}" == *-musl && -n "$needed" ]]; then
+              echo "::error::${bin} (musl) is not statically linked"; exit 1
+            fi
+          done
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -92,7 +123,6 @@ jobs:
           OUTDIR="dist/${TARGET}"
           mkdir -p "${OUTDIR}"
           cp "target/${TARGET}/release/dg" "${OUTDIR}/"
-          cp "target/${TARGET}/release/dg-mcp" "${OUTDIR}/"
           tar -czf "dist/dg-${TARGET}.tar.gz" -C "dist" "${TARGET}"
 
       - name: Package (Windows)
@@ -103,7 +133,6 @@ jobs:
           OUTDIR="dist/${TARGET}"
           mkdir -p "${OUTDIR}"
           cp "target/${TARGET}/release/dg.exe" "${OUTDIR}/"
-          cp "target/${TARGET}/release/dg-mcp.exe" "${OUTDIR}/"
           cd dist
           7z a "dg-${TARGET}.zip" "${TARGET}"
 
@@ -205,6 +234,9 @@ jobs:
                   content, f"sha256 of {asset}", flags=re.DOTALL,
               )
 
+          # dg-mcp was removed in 0.1.18; tarballs only carry dg
+          content = re.sub(r'\n[ \t]*bin\.install "dg-mcp"', "", content)
+
           with open("Formula/dg.rb", "w") as f:
               f.write(content)
           PYEOF
@@ -216,3 +248,47 @@ jobs:
           fi
           git commit --no-gpg-sign -m "chore: update dg to ${TAG}"
           git push origin HEAD
+
+  # nix/dg-bin.nix reads nix/release.json. A tag can't hold hashes of its own
+  # assets, so write them to main after the release; consumers tracking main
+  # then get the new binaries on `devenv update dg`.
+  update-nix-release:
+    name: Update nix/release.json
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Write release.json from SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          CURRENT="$(jq -r .version nix/release.json)"
+          # Re-running an old tag must not roll main back
+          if [ "$(printf '%s\n%s\n' "$CURRENT" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; then
+            echo "main already has ${CURRENT}, newer than ${VERSION}; skipping."
+            exit 0
+          fi
+          gh release download "$GITHUB_REF_NAME" -p SHA256SUMS -O "$RUNNER_TEMP/SHA256SUMS"
+          nix/update-release.sh "$VERSION" "$RUNNER_TEMP/SHA256SUMS"
+
+      - name: Commit to main
+        run: |
+          set -euo pipefail
+          git add nix/release.json
+          if git diff --cached --quiet; then
+            echo "nix/release.json already up to date; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --no-gpg-sign -m "chore(nix): release.json for ${GITHUB_REF_NAME}"
+          for _ in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1
