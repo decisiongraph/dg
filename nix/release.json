@@ -1,0 +1,21 @@
+{
+  "version": "0.1.17",
+  "assets": {
+    "aarch64-darwin": {
+      "target": "aarch64-apple-darwin",
+      "hash": "sha256-AITDoglou/w3zWu9ZJCc/DJnyd+22rRQM7zHR8fDer0="
+    },
+    "x86_64-darwin": {
+      "target": "x86_64-apple-darwin",
+      "hash": "sha256-fPk3FMJHp54tMWHVnFICnW6ZVf0xjqbK3K8dhoN3O7o="
+    },
+    "aarch64-linux": {
+      "target": "aarch64-unknown-linux-gnu",
+      "hash": "sha256-DlNyrxxEpNIKn6FaPOWWN198b3i6QlflRdX4nZ+B0u0="
+    },
+    "x86_64-linux": {
+      "target": "x86_64-unknown-linux-gnu",
+      "hash": "sha256-t0BEghYeHoizfAteZNWjoe6ebqImyhJs+0gv246SDUc="
+    }
+  }
+}

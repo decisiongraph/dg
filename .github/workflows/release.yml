@@ -247,3 +247,47 @@ jobs:
           fi
           git commit --no-gpg-sign -m "chore: update dg to ${TAG}"
           git push origin HEAD
+
+  # nix/dg-bin.nix reads nix/release.json. A tag can't hold hashes of its own
+  # assets, so write them to main after the release; consumers tracking main
+  # then get the new binaries on `devenv update dg`.
+  update-nix-release:
+    name: Update nix/release.json
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Write release.json from SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          CURRENT="$(jq -r .version nix/release.json)"
+          # Re-running an old tag must not roll main back
+          if [ "$(printf '%s\n%s\n' "$CURRENT" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; then
+            echo "main already has ${CURRENT}, newer than ${VERSION}; skipping."
+            exit 0
+          fi
+          gh release download "$GITHUB_REF_NAME" -p SHA256SUMS -O "$RUNNER_TEMP/SHA256SUMS"
+          nix/update-release.sh "$VERSION" "$RUNNER_TEMP/SHA256SUMS"
+
+      - name: Commit to main
+        run: |
+          set -euo pipefail
+          git add nix/release.json
+          if git diff --cached --quiet; then
+            echo "nix/release.json already up to date; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --no-gpg-sign -m "chore(nix): release.json for ${GITHUB_REF_NAME}"
+          for _ in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1
