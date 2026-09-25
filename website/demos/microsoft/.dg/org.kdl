@@ -1,0 +1,155 @@
+// Microsoft Decision Archive — people and teams
+// Converted from the original dg.toml sample. No emails on purpose: dg
+// looks up GitHub avatars by email, which would pick up unrelated accounts.
+
+// Original founders of Microsoft
+team "founders" {
+    name "Founders"
+}
+
+// Microsoft Board of Directors
+team "board" {
+    name "Board of Directors"
+    lead "billg"
+}
+
+// Senior executive leadership
+team "executive" {
+    name "Executive Team"
+    lead "satya"
+}
+
+// Core engineering organization
+team "engineering" {
+    name "Engineering"
+}
+
+// Windows NT kernel and systems development
+team "nt-team" {
+    name "Windows NT Team"
+    lead "cutler"
+    parent "engineering"
+}
+
+// Windows client development
+team "windows-team" {
+    name "Windows Division"
+    parent "engineering"
+}
+
+// Office productivity suite development
+team "office-team" {
+    name "Office Division"
+    parent "engineering"
+}
+
+// Xbox gaming platform
+team "xbox-team" {
+    name "Xbox Division"
+    parent "engineering"
+}
+
+// Research and advanced development
+team "research" {
+    name "Microsoft Research"
+}
+
+// Legal, regulatory, and policy affairs
+team "legal" {
+    name "Legal & Corporate Affairs"
+    lead "bradsmith"
+}
+
+user "billg" {
+    name "Bill Gates"
+    title "Co-founder, Chairman"
+    teams "founders" "board"
+}
+
+// 1983-02-18: Left day-to-day operations (remained on board until 2000)
+user "paul" {
+    name "Paul Allen"
+    title "Co-founder"
+    teams "founders"
+    status "departed"
+}
+
+user "steveb" {
+    name "Steve Ballmer"
+    title "CEO"
+    teams "executive" "board"
+}
+
+user "satya" {
+    name "Satya Nadella"
+    title "CEO"
+    teams "executive" "board"
+}
+
+user "cutler" {
+    name "Dave Cutler"
+    title "Architect"
+    teams "engineering" "nt-team"
+}
+
+// 2002-03-01: Left to found Intentional Software
+user "simonyi" {
+    name "Charles Simonyi"
+    title "Architect"
+    teams "engineering" "office-team"
+    status "departed"
+}
+
+// 2012-11-12: Departed after Windows 8 launch
+user "sinofsky" {
+    name "Steven Sinofsky"
+    title "President"
+    teams "windows-team" "office-team"
+    status "departed"
+}
+
+// 2010-05-25: Left Microsoft
+user "allard" {
+    name "Jay Allard"
+    title "VP"
+    teams "xbox-team"
+    status "departed"
+}
+
+user "bradsmith" {
+    name "Brad Smith"
+    title "President, General Counsel"
+    teams "executive" "legal"
+}
+
+// 2010-10-18: Stepped down as Chief Software Architect
+user "rayozzie" {
+    name "Ray Ozzie"
+    title "CTO, Chief Software Architect"
+    teams "executive"
+    status "departed"
+}
+
+// 1999-01-01: Left to found Intellectual Ventures
+user "myhrvold" {
+    name "Nathan Myhrvold"
+    title "CTO"
+    teams "research"
+    status "departed"
+}
+
+// 1995-07-01: Retired from Microsoft
+user "maples" {
+    name "Mike Maples"
+    title "EVP"
+    teams "executive"
+    status "departed"
+}
+
+// 1996-01-01: Left after Microsoft Bob
+user "melinda" {
+    name "Melinda French Gates"
+    title "Product Manager"
+    teams "executive"
+    status "departed"
+}

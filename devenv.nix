@@ -169,6 +169,8 @@ in
         fi
       ''}";
       files = "\\decisions/.*\\.md$";
+      # website/demos/* are separate dg projects (own .dg/), validated by CI
+      excludes = [ "^website/" ];
       pass_filenames = false;
     };
 
@@ -183,6 +185,8 @@ in
         fi
       ''}";
       files = "\\decisions/.*\\.md$";
+      # website/demos/* are separate dg projects (own .dg/), validated by CI
+      excludes = [ "^website/" ];
       pass_filenames = false;
     };
 

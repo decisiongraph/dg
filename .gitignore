@@ -58,6 +58,7 @@ ui/.vite/
 
 # Dev screenshots
 *.png
+!website/static/*.png
 
 # Personal test/research dirs
 onni-tests/
