@@ -147,6 +147,9 @@ dg set OPP-001 --section Decision --content-file notes.md  # Read from file
 dg set OPP-001 --section Timeline --add-row "10:30,Restored,@ops"
 dg set OPP-001 --remove tags                      # Remove a field
 
+# Delete
+dg delete OPP-001
+
 # Validate & lint
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes
@@ -211,6 +214,31 @@ dg fmt                               # Auto-format documents to schema order
 dg renumber                          # Reorder document IDs chronologically
 dg coverage                          # Coverage metrics by type/status
 dg team list                         # Show orgs, teams, users
+```
+
+## External document hooks
+
+Executable scripts in `.dg/hooks/on_create`, `.dg/hooks/on_update`, and
+`.dg/hooks/on_delete` receive document notifications from CLI mutations. Each
+script is invoked from the project root with `<document-id> <event-type>`
+arguments. Create and delete hooks receive the affected document JSON on
+stdin; delete receives the document as it existed before removal.
+
+Update hooks receive an object containing `before`, `after`, and `diff`, where
+`diff` uses the same `field_changes` and `section_changes` structure as
+`dg diff`. Hook failures are reported as warnings and do not roll back or
+fail the document mutation.
+
+Hooks fire after `dg new`, `set`, `delete`, `fmt`, `renumber`, `team`,
+`generate` and `import` (not on `--dry-run`/`--check`). A renumber shows up as
+delete + create. Hooks run directly (no shell), so they need a shebang and the
+executable bit; missing or non-executable hooks are skipped. Hook stdout is
+discarded; stderr is shown when the hook exits non-zero.
+
+```bash
+#!/usr/bin/env bash
+# .dg/hooks/on_update
+exec my-tool dg-changed "$@"   # $1=ADR-001 $2=update, JSON on stdin
 ```
 
 ## Field assignment rules
