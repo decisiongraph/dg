@@ -140,17 +140,7 @@ fn run() -> Result<()> {
     let mut cache =
         md_db::cache::DocCache::load(&cache_path).unwrap_or_else(|_| md_db::cache::DocCache::new());
 
-    let document_snapshot = if document_hooks::command_may_change_documents(&cli.command) {
-        match document_hooks::capture(&root) {
-            Ok(snapshot) => Some(snapshot),
-            Err(error) => {
-                eprintln!("warning: failed to snapshot documents for hooks: {error}");
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let document_snapshot = document_hooks::before_command(&root, &cli.command);
 
     let result = match cli.command {
         Command::Init { .. }
@@ -195,12 +185,7 @@ fn run() -> Result<()> {
 
     // Notify external document hooks after command-side mutations.
     if let Some(before) = document_snapshot {
-        match document_hooks::capture(&root) {
-            Ok(after) => document_hooks::dispatch(&root, &schema, &before, &after),
-            Err(error) => {
-                eprintln!("warning: failed to snapshot documents after mutation: {error}");
-            }
-        }
+        document_hooks::after_command(&root, &schema, &before);
     }
 
     // Save cache if modified

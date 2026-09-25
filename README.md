@@ -208,6 +208,18 @@ Update hooks receive an object containing `before`, `after`, and `diff`, where
 `dg diff`. Hook failures are reported as warnings and do not roll back or
 fail the document mutation.
 
+Hooks fire after `dg new`, `set`, `delete`, `fmt`, `renumber`, `team`,
+`generate` and `import` (not on `--dry-run`/`--check`). A renumber shows up as
+delete + create. Hooks run directly (no shell), so they need a shebang and the
+executable bit; missing or non-executable hooks are skipped. Hook stdout is
+discarded; stderr is shown when the hook exits non-zero.
+
+```bash
+#!/usr/bin/env bash
+# .dg/hooks/on_update
+exec my-tool dg-changed "$@"   # $1=ADR-001 $2=update, JSON on stdin
+```
+
 ## Field assignment rules
 
 `dg set` and `dg new` use `=` to set scalar fields and `+=` to append to arrays:

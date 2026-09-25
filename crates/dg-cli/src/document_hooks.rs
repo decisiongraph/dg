@@ -1,9 +1,14 @@
+//! External document hooks: `.dg/hooks/on_{create,update,delete}`.
+//!
+//! Hooks are notifications that run after a CLI command has written its
+//! changes. They never roll back or fail the mutation; failures are warnings.
+
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use md_db::document::Document;
 use md_db::graph;
 use md_db::schema::Schema;
@@ -25,6 +30,8 @@ enum DocumentEvent {
 }
 
 impl DocumentEvent {
+    const ALL: [Self; 3] = [Self::Create, Self::Update, Self::Delete];
+
     fn as_str(self) -> &'static str {
         match self {
             Self::Create => "create",
@@ -38,7 +45,7 @@ impl DocumentEvent {
 ///
 /// Keeping this list explicit avoids scanning every document for read-only
 /// commands. Commands that add a new document-writing path must be added here.
-pub(crate) fn command_may_change_documents(command: &Command) -> bool {
+fn command_may_change_documents(command: &Command) -> bool {
     match command {
         Command::New(_) | Command::Delete(_) => true,
         Command::Set(args) => !args.dry_run,
@@ -49,78 +56,115 @@ pub(crate) fn command_may_change_documents(command: &Command) -> bool {
     }
 }
 
-/// Capture all Markdown documents under the project root.
-pub(crate) fn capture(root: &Path) -> Result<DocumentSnapshot> {
-    let files = md_db::discovery::discover_files(root, None, &[], false)?;
-    let mut snapshot = BTreeMap::new();
-
-    for path in files {
-        let raw = match std::fs::read_to_string(&path) {
-            Ok(raw) => raw,
-            Err(_) => continue,
-        };
-        snapshot.insert(path, raw);
+/// Snapshot documents before a command runs, if it may mutate documents and at
+/// least one hook is installed. `None` means no hooks need to be dispatched.
+pub(crate) fn before_command(root: &Path, command: &Command) -> Option<DocumentSnapshot> {
+    if !command_may_change_documents(command) || !any_hook_installed(root) {
+        return None;
     }
+    capture(root)
+        .inspect_err(|error| {
+            eprintln!("warning: failed to snapshot documents for hooks: {error:#}")
+        })
+        .ok()
+}
 
-    Ok(snapshot)
+/// Snapshot documents after a command ran and dispatch hooks for every change.
+pub(crate) fn after_command(root: &Path, schema: &Schema, before: &DocumentSnapshot) {
+    match capture(root) {
+        Ok(after) => dispatch(root, schema, before, &after),
+        Err(error) => {
+            eprintln!("warning: failed to snapshot documents for hooks: {error:#}");
+        }
+    }
+}
+
+fn hook_path(root: &Path, event: DocumentEvent) -> PathBuf {
+    root.join(".dg")
+        .join("hooks")
+        .join(format!("on_{}", event.as_str()))
+}
+
+fn any_hook_installed(root: &Path) -> bool {
+    DocumentEvent::ALL
+        .iter()
+        .any(|event| is_executable(&hook_path(root, *event)))
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata()
+        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
+}
+
+/// Capture all Markdown documents under the project root.
+fn capture(root: &Path) -> Result<DocumentSnapshot> {
+    let files = md_db::discovery::discover_files(root, None, &[], false)?;
+    Ok(files
+        .into_iter()
+        .filter_map(|path| {
+            let raw = std::fs::read_to_string(&path).ok()?;
+            Some((path, raw))
+        })
+        .collect())
 }
 
 /// Dispatch hooks for all document changes observed between two snapshots.
-///
-/// Hook failures are warnings rather than command failures: the document write
-/// already happened, and hooks are notifications rather than transaction
-/// participants.
-pub(crate) fn dispatch(
-    root: &Path,
-    schema: &Schema,
-    before: &DocumentSnapshot,
-    after: &DocumentSnapshot,
-) {
-    let mut paths = BTreeSet::new();
-    paths.extend(before.keys().cloned());
-    paths.extend(after.keys().cloned());
+fn dispatch(root: &Path, schema: &Schema, before: &DocumentSnapshot, after: &DocumentSnapshot) {
+    let paths: BTreeSet<&PathBuf> = before.keys().chain(after.keys()).collect();
 
     for path in paths {
-        let old = before.get(&path);
-        let new = after.get(&path);
+        let old = before.get(path).map(String::as_str);
+        let new = after.get(path).map(String::as_str);
         let event = match (old, new) {
             (None, Some(_)) => DocumentEvent::Create,
             (Some(_), None) => DocumentEvent::Delete,
             (Some(old), Some(new)) if old != new => DocumentEvent::Update,
             _ => continue,
         };
+        // Only DG documents (with frontmatter) fire hooks, not READMEs etc.
+        if !old.into_iter().chain(new).any(has_frontmatter) {
+            continue;
+        }
 
-        let id = graph::path_to_id_with_schema(&path, schema);
-        let payload = payload(event, &path, &id, old, new);
-        run_hook(root, event, &id, &payload);
+        let id = graph::path_to_id_with_schema(path, schema);
+        let payload = payload(event, path, &id, old, new);
+        if let Err(error) = run_hook(root, event, &id, &payload) {
+            eprintln!(
+                "warning: dg on_{} hook failed for {id}: {error:#}",
+                event.as_str()
+            );
+        }
     }
+}
+
+fn has_frontmatter(raw: &str) -> bool {
+    Document::from_str(raw).is_ok_and(|doc| doc.frontmatter.is_some())
 }
 
 fn payload(
     event: DocumentEvent,
     path: &Path,
     id: &str,
-    before: Option<&String>,
-    after: Option<&String>,
+    before: Option<&str>,
+    after: Option<&str>,
 ) -> Value {
     match event {
-        DocumentEvent::Create => after
-            .map(|raw| document_json(path, raw))
-            .unwrap_or(Value::Null),
-        DocumentEvent::Delete => before
-            .map(|raw| document_json(path, raw))
-            .unwrap_or(Value::Null),
+        DocumentEvent::Create => document_json(path, after.unwrap_or_default()),
+        DocumentEvent::Delete => document_json(path, before.unwrap_or_default()),
         DocumentEvent::Update => {
-            let before_raw = before.map(String::as_str).unwrap_or("");
-            let after_raw = after.map(String::as_str).unwrap_or("");
-            let before_json = document_json(path, before_raw);
-            let after_json = document_json(path, after_raw);
-            let diff = update_diff(path, id, before_raw, after_raw);
-
+            let before = before.unwrap_or_default();
+            let after = after.unwrap_or_default();
             json!({
-                "before": before_json,
-                "after": after_json,
-                "diff": diff,
+                "before": document_json(path, before),
+                "after": document_json(path, after),
+                "diff": update_diff(path, id, before, after),
             })
         }
     }
@@ -140,117 +184,73 @@ fn document_json(path: &Path, raw: &str) -> Value {
 }
 
 fn update_diff(path: &Path, id: &str, before: &str, after: &str) -> Value {
-    let mut diff = match md_db::diff::diff_documents(before, after) {
-        Ok(diff) => diff,
-        Err(_) => return Value::Null,
+    let Ok(mut diff) = md_db::diff::diff_documents(before, after) else {
+        return Value::Null;
     };
     diff.path = Some(path.display().to_string());
     diff.id = Some(id.to_string());
-
-    match serde_json::to_value(diff) {
-        Ok(value) => value,
-        Err(_) => Value::Null,
-    }
+    serde_json::to_value(diff).unwrap_or(Value::Null)
 }
 
-fn run_hook(root: &Path, event: DocumentEvent, id: &str, payload: &Value) {
-    let event_name = event.as_str();
-    let hook_path = root
-        .join(".dg")
-        .join("hooks")
-        .join(format!("on_{event_name}"));
-    if !hook_path.is_file() {
-        return;
+/// Run one hook with `<id> <event>` argv and `payload` JSON on stdin.
+///
+/// Missing or non-executable hooks are skipped silently. The hook path is
+/// executed directly (no shell). Its stdout is discarded so it cannot corrupt
+/// dg's own output; stderr is reported when the hook exits non-zero.
+fn run_hook(root: &Path, event: DocumentEvent, id: &str, payload: &Value) -> Result<()> {
+    let hook = hook_path(root, event);
+    if !is_executable(&hook) {
+        return Ok(());
     }
+    // Resolve before changing the child cwd, so a relative --root such as
+    // `project` doesn't become `project/project/...`.
+    let executable = hook
+        .canonicalize()
+        .with_context(|| format!("cannot resolve {}", hook.display()))?;
+    let payload = serde_json::to_vec(payload).context("cannot serialize payload")?;
 
-    // Resolve the executable before changing the child working directory. This
-    // keeps --root values such as `project` from becoming `project/project/...`.
-    let executable = match hook_path.canonicalize() {
-        Ok(path) => path,
-        Err(error) => {
-            eprintln!(
-                "warning: cannot resolve dg {event_name} hook {}: {error}",
-                hook_path.display()
-            );
-            return;
-        }
-    };
-
-    let payload = match serde_json::to_vec(payload) {
-        Ok(payload) => payload,
-        Err(error) => {
-            eprintln!(
-                "warning: cannot serialize payload for dg {event_name} hook {}: {error}",
-                hook_path.display()
-            );
-            return;
-        }
-    };
-
-    let mut child = match ProcessCommand::new(&executable)
+    let mut child = ProcessCommand::new(&executable)
         .arg(id)
-        .arg(event_name)
+        .arg(event.as_str())
         .current_dir(root)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-    {
-        Ok(child) => child,
-        Err(error) => {
-            eprintln!(
-                "warning: failed to run dg {event_name} hook {}: {error}",
-                hook_path.display()
-            );
-            return;
-        }
-    };
+        .with_context(|| format!("failed to run {}", hook.display()))?;
 
+    // Write stdin on a separate thread so a hook that fills its stderr pipe
+    // before reading stdin can't deadlock us.
     let stdin = child.stdin.take();
-    let writer = std::thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(&payload)));
-    let output = child.wait_with_output();
-    let write_result = match writer.join() {
-        Ok(result) => result,
-        Err(_) => Some(Err(std::io::Error::other(
-            "hook stdin writer thread panicked",
-        ))),
-    };
+    let writer = std::thread::spawn(move || match stdin {
+        Some(mut stdin) => stdin.write_all(&payload),
+        None => Ok(()),
+    });
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("failed waiting for {}", hook.display()))?;
 
-    if let Some(Err(error)) = write_result {
-        eprintln!(
-            "warning: failed to provide stdin to dg {event_name} hook {}: {error}",
-            hook_path.display()
-        );
+    match writer.join() {
+        // Hooks that ignore stdin may exit before reading it; that's fine.
+        Ok(Err(error)) if error.kind() != ErrorKind::BrokenPipe => {
+            return Err(error).context("failed to write hook stdin");
+        }
+        Err(_) => bail!("hook stdin writer thread panicked"),
+        _ => {}
     }
 
-    match output {
-        Ok(output) if !output.status.success() => {
-            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            if detail.is_empty() {
-                eprintln!(
-                    "warning: dg {event_name} hook {} exited with {}",
-                    hook_path.display(),
-                    output.status
-                );
-            } else {
-                eprintln!(
-                    "warning: dg {event_name} hook {} exited with {}: {detail}",
-                    hook_path.display(),
-                    output.status
-                );
-            }
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = stderr.trim();
+        if stderr.is_empty() {
+            bail!("{} exited with {}", hook.display(), output.status);
         }
-        Ok(_) => {}
-        Err(error) => {
-            eprintln!(
-                "warning: failed waiting for dg {event_name} hook {}: {error}",
-                hook_path.display()
-            );
-        }
+        bail!("{} exited with {}: {stderr}", hook.display(), output.status);
     }
+    Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;

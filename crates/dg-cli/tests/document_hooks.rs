@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -17,28 +19,25 @@ fn setup_project() -> TempDir {
     temp
 }
 
-fn install_hook(root: &Path, event: &str, output: &Path) {
+fn write_hook(root: &Path, event: &str, body: &str, mode: u32) {
     let script = root.join(".dg/hooks").join(format!("on_{event}"));
-    fs::write(
-        &script,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n%s\\n' \"$1\" \"$2\" > '{}'\ncat >> '{}'\n",
-            output.display(),
-            output.display()
-        ),
-    )
-    .unwrap();
-    let mut permissions = fs::metadata(&script).unwrap().permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(script, permissions).unwrap();
+    fs::write(&script, format!("#!/bin/sh\n{body}")).unwrap();
+    fs::set_permissions(script, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+/// Hook that records argv (one per line) followed by stdin into `output`.
+fn install_hook(root: &Path, event: &str, output: &Path) {
+    let out = output.display();
+    write_hook(
+        root,
+        event,
+        &format!("printf '%s\\n%s\\n' \"$1\" \"$2\" > '{out}'\ncat >> '{out}'\n"),
+        0o755,
+    );
 }
 
 fn install_failing_hook(root: &Path, event: &str) {
-    let script = root.join(".dg/hooks").join(format!("on_{event}"));
-    fs::write(&script, "#!/bin/sh\nexit 7\n").unwrap();
-    let mut permissions = fs::metadata(&script).unwrap().permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(script, permissions).unwrap();
+    write_hook(root, event, "exit 7\n", 0o755);
 }
 
 fn run_dg(root: &Path, args: &[&str]) -> Output {
@@ -118,5 +117,41 @@ fn failing_hook_does_not_fail_cli_mutation() {
         "dg new failed after hook failure: {}",
         String::from_utf8_lossy(&created.stderr)
     );
-    assert!(String::from_utf8_lossy(&created.stderr).contains("hook"));
+    let stderr = String::from_utf8_lossy(&created.stderr);
+    assert!(
+        stderr.contains("warning: dg on_create hook failed for ADR-001"),
+        "missing hook warning: {stderr}"
+    );
+    assert!(
+        stderr.contains("exit status: 7"),
+        "missing status: {stderr}"
+    );
+}
+
+#[test]
+fn non_executable_hook_is_skipped_silently() {
+    let project = setup_project();
+    let record = project.path().join("create-record");
+    write_hook(
+        project.path(),
+        "create",
+        &format!("touch '{}'\n", record.display()),
+        0o644,
+    );
+
+    let created = run_dg(project.path(), &["new", "adr", "No hook runs"]);
+    assert!(created.status.success());
+    assert!(!record.exists(), "non-executable hook must not run");
+    assert!(!String::from_utf8_lossy(&created.stderr).contains("warning"));
+}
+
+#[test]
+fn hook_ignoring_stdin_does_not_warn() {
+    let project = setup_project();
+    write_hook(project.path(), "create", "exit 0\n", 0o755);
+
+    let created = run_dg(project.path(), &["new", "adr", "Hook ignores stdin"]);
+    assert!(created.status.success());
+    let stderr = String::from_utf8_lossy(&created.stderr);
+    assert!(!stderr.contains("warning"), "unexpected warning: {stderr}");
 }
