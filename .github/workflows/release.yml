@@ -38,6 +38,13 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             use_cross: true
+          # Fully static, no glibc needed (Alpine, scratch containers, old distros)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            use_cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
           - target: aarch64-apple-darwin
@@ -55,6 +62,12 @@ jobs:
           targets: ${{ matrix.target }}
 
       - uses: oven-sh/setup-bun@v2
+
+      # libz-sys otherwise links the runner's libz.so.1 dynamically on native
+      # builds but bundles it under cross, so Linux tarballs differed (#34)
+      - name: Link zlib statically (Linux)
+        if: runner.os == 'Linux'
+        run: echo "LIBZ_SYS_STATIC=1" >> "$GITHUB_ENV"
 
       - name: Install cross
         if: matrix.use_cross
@@ -83,6 +96,24 @@ jobs:
       - name: Build (cargo)
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --locked --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+
+      - name: Verify Linux linkage
+        if: runner.os == 'Linux'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          for bin in dg dg-mcp; do
+            f="target/${TARGET}/release/${bin}"
+            needed="$(readelf -d "$f" | grep NEEDED || true)"
+            echo "${bin}: ${needed:-<none>}"
+            if grep -q libz <<<"$needed"; then
+              echo "::error::${bin} links libz dynamically"; exit 1
+            fi
+            if [[ "${TARGET}" == *-musl && -n "$needed" ]]; then
+              echo "::error::${bin} (musl) is not statically linked"; exit 1
+            fi
+          done
 
       - name: Package (Unix)
         if: runner.os != 'Windows'

@@ -1,2 +1,2 @@
 [build.env]
-passthrough = ["DG_SKIP_UI_BUILD"]
+passthrough = ["DG_SKIP_UI_BUILD", "LIBZ_SYS_STATIC"]
