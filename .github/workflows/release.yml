@@ -234,7 +234,7 @@ jobs:
                   content, f"sha256 of {asset}", flags=re.DOTALL,
               )
 
-          # dg-mcp was removed after 0.1.17; tarballs only carry dg
+          # dg-mcp was removed in 0.1.18; tarballs only carry dg
           content = re.sub(r'\n[ \t]*bin\.install "dg-mcp"', "", content)
 
           with open("Formula/dg.rb", "w") as f:
