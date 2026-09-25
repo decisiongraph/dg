@@ -1,4 +1,4 @@
-# dg + dg-mcp from the latest GitHub release binaries. Takes any pkgs, so
+# dg from the latest GitHub release binaries. Takes any pkgs, so
 # consumers can callPackage it with their own nixpkgs: evaluates in
 # milliseconds and never compiles. release.json is written by release.yml.
 { lib, stdenv, fetchurl, autoPatchelfHook, zlib }:
@@ -26,7 +26,7 @@ stdenv.mkDerivation {
   dontStrip = true;
   installPhase = ''
     runHook preInstall
-    install -Dm755 dg dg-mcp -t $out/bin
+    install -Dm755 dg -t $out/bin
     runHook postInstall
   '';
   doInstallCheck = true;
@@ -34,7 +34,7 @@ stdenv.mkDerivation {
     $out/bin/dg --version
   '';
   meta = {
-    description = "Decision Graph — markdown-as-database CLI and MCP server (prebuilt)";
+    description = "Decision Graph — markdown-as-database CLI (prebuilt)";
     homepage = "https://github.com/decisiongraph/dg";
     mainProgram = "dg";
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];

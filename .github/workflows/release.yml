@@ -91,11 +91,11 @@ jobs:
         if: matrix.use_cross
         env:
           DG_SKIP_UI_BUILD: "1"
-        run: cross build --release --locked --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+        run: cross build --release --locked --target ${{ matrix.target }} -p dg-cli
 
       - name: Build (cargo)
         if: ${{ !matrix.use_cross }}
-        run: cargo build --release --locked --target ${{ matrix.target }} -p dg-cli -p dg-mcp
+        run: cargo build --release --locked --target ${{ matrix.target }} -p dg-cli
 
       - name: Verify Linux linkage
         if: runner.os == 'Linux'
@@ -103,7 +103,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          for bin in dg dg-mcp; do
+          for bin in dg; do
             f="target/${TARGET}/release/${bin}"
             needed="$(readelf -d "$f" | grep NEEDED || true)"
             echo "${bin}: ${needed:-<none>}"
@@ -123,7 +123,6 @@ jobs:
           OUTDIR="dist/${TARGET}"
           mkdir -p "${OUTDIR}"
           cp "target/${TARGET}/release/dg" "${OUTDIR}/"
-          cp "target/${TARGET}/release/dg-mcp" "${OUTDIR}/"
           tar -czf "dist/dg-${TARGET}.tar.gz" -C "dist" "${TARGET}"
 
       - name: Package (Windows)
@@ -134,7 +133,6 @@ jobs:
           OUTDIR="dist/${TARGET}"
           mkdir -p "${OUTDIR}"
           cp "target/${TARGET}/release/dg.exe" "${OUTDIR}/"
-          cp "target/${TARGET}/release/dg-mcp.exe" "${OUTDIR}/"
           cd dist
           7z a "dg-${TARGET}.zip" "${TARGET}"
 
@@ -235,6 +233,9 @@ jobs:
                   rf'\g<1>{digest}\g<2>',
                   content, f"sha256 of {asset}", flags=re.DOTALL,
               )
+
+          # dg-mcp was removed after 0.1.17; tarballs only carry dg
+          content = re.sub(r'\n[ \t]*bin\.install "dg-mcp"', "", content)
 
           with open("Formula/dg.rb", "w") as f:
               f.write(content)

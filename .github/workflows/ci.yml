@@ -102,7 +102,6 @@ jobs:
       - name: Smoke test binaries
         run: |
           ./result/bin/dg --version
-          test -x ./result/bin/dg-mcp
 
       # Prebuilt release binaries (nix/dg-bin.nix): catches a bad
       # release.json, tarball layout change or missing shared library

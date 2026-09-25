@@ -797,17 +797,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dg-mcp"
-version = "0.1.17"
-dependencies = [
- "anyhow",
- "dg-schemas",
- "md-db",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "dg-schemas"
 version = "0.1.17"
 dependencies = [

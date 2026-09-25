@@ -9,7 +9,6 @@ Documents form a dependency graph with forward refs and backlinks, giving teams 
 ```bash
 # Install to ~/.cargo/bin (release build)
 cargo install --path crates/dg-cli
-cargo install --path crates/dg-mcp   # optional: MCP server for AI agents
 
 # Or build release binaries in target/release/
 cargo build --release
@@ -17,7 +16,7 @@ cargo build --release
 
 ### Nix / devenv
 
-The repo is a Nix flake exposing a `dg` package (contains both `dg` and `dg-mcp` binaries):
+The repo is a Nix flake exposing a `dg` package:
 
 ```bash
 nix run github:decisiongraph/dg -- --version   # run without installing
@@ -418,8 +417,6 @@ dg init --dependabot       # Generate .github/dependabot.yml + devenv update wor
 
 Skills installed cover: opportunity, ADR, policy, incident, spec, diagram, team, image, Mermaid flowchart, Mermaid sequence.
 
-The MCP server (`dg-mcp`) exposes JSON-RPC tools over stdio for direct agent integration without the CLI: `dg-validate`, `dg-get`, `dg-list`, `dg-inspect`, `dg-describe`, `dg-set`, `dg-new`, `dg-refs`, `dg-graph`, `dg-deprecate`.
-
 ## Project structure
 
 After `dg init`:
@@ -446,7 +443,6 @@ CLAUDE.md          # AI agent instructions (auto-generated)
 | `crates/md-db` | Core library: parsing, validation, graph, search, diff, export, site generation |
 | `crates/dg-schemas` | Built-in KDL schema, org template, AI agent templates |
 | `crates/gherkin` | Gherkin parsing, semantic validation, diagram generation |
-| `crates/dg-mcp` | MCP server for AI agents (JSON-RPC over stdio) |
 | `crates/markdown-tui` | Terminal markdown renderer (GFM → ANSI / ratatui widgets) |
 | `cc-eval/` | Claude Code evaluation runner (standalone, not in workspace) |
 

@@ -6,7 +6,6 @@ members = [
     "crates/gherkin",
     "crates/markdown-tui",
     "crates/md-db",
-    "crates/dg-mcp",
 ]
 exclude = ["cc-eval"]
 
