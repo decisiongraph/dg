@@ -21,7 +21,16 @@ use rust_embed::Embed;
 #[include = "*.woff2"]
 struct SpaAssets;
 
-/// Write all embedded SPA files to `output_dir`.
+/// Root SPA shell. Not written by `write_spa_files()`: `site::write_html_shells()`
+/// localizes it per route so the site works under any subpath.
+const INDEX_HTML: &str = "index.html";
+
+/// The embedded SvelteKit shell (`index.html`) before per-route localization.
+pub fn index_template() -> Option<String> {
+    <SpaAssets as Embed>::get(INDEX_HTML).map(|f| String::from_utf8_lossy(&f.data).into_owned())
+}
+
+/// Write all embedded SPA files except the root `index.html` to `output_dir`.
 ///
 /// Skips the write if the on-disk `_app/version.json` matches the embedded
 /// version (same binary, no SPA changes). This avoids nuking `_app/` during
@@ -31,7 +40,7 @@ struct SpaAssets;
 /// Returns the number of files written (0 if skipped).
 pub fn write_spa_files(output_dir: &Path) -> crate::error::Result<usize> {
     // Check if on-disk SPA matches embedded version — skip _app/ rewrite if so.
-    // Always rewrite root HTML files (index.html, 200.html) since they can change
+    // Always rewrite other root HTML files (e.g. 200.html) since they can change
     // independently of the JS bundle version (e.g. app.html template changes).
     let version_path = output_dir.join("_app/version.json");
     let version_matches = version_path.is_file()
@@ -48,7 +57,7 @@ pub fn write_spa_files(output_dir: &Path) -> crate::error::Result<usize> {
         let mut count = 0;
         for file_path in <SpaAssets as Embed>::iter() {
             let path_str = file_path.as_ref();
-            if !path_str.ends_with(".html") || path_str.contains('/') {
+            if !path_str.ends_with(".html") || path_str.contains('/') || path_str == INDEX_HTML {
                 continue;
             }
             let content = match <SpaAssets as Embed>::get(path_str) {
@@ -76,6 +85,9 @@ pub fn write_spa_files(output_dir: &Path) -> crate::error::Result<usize> {
 
     let mut count = 0;
     for file_path in <SpaAssets as Embed>::iter() {
+        if file_path == INDEX_HTML {
+            continue;
+        }
         let content = match <SpaAssets as Embed>::get(&file_path) {
             Some(c) => c,
             None => continue,

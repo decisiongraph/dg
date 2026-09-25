@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import StatusBadge from './StatusBadge.svelte';
 	import UserAvatar from './UserAvatar.svelte';
 	import type { DocEntry } from '$lib/types';
@@ -31,7 +32,7 @@
 	const borderColor = $derived(typeColors[doc.type] ?? 'border-l-gray-400');
 	const glow = $derived(isInactive(doc.status) ? '' : (neonGlow[doc.type] ?? '0 0 8px rgba(156,163,175,0.4)'));
 	const folder = $derived($docTypes[doc.type]?.folder ?? doc.type);
-	const href = $derived(`/${folder}/${doc.id.toLowerCase()}`);
+	const href = $derived(withBase(`/${folder}/${doc.id.toLowerCase()}`));
 	const user = $derived(doc.author ? $orgData?.users[doc.author] : undefined);
 
 	// Rollup over docs that implement / depend on this one

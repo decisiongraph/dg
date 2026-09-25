@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { rebaseHtml, withBase } from '$lib/url';
 	import StatusBadge from './StatusBadge.svelte';
 	import UserAvatar from './UserAvatar.svelte';
 	import TechPill from './TechPill.svelte';
@@ -109,7 +110,7 @@
 </script>
 
 <a
-	href="/software/{service.kind === 'app' ? 'apps' : service.kind === 'infra' ? 'infra' : 'services'}/{service.slug}"
+	href={withBase(`/software/${service.kind === 'app' ? 'apps' : service.kind === 'infra' ? 'infra' : 'services'}/${service.slug}`)}
 	class="service-card block rounded-xl border border-l-4 {borderColor} bg-card p-4 shadow-sm transition-all hover:shadow-md cursor-pointer no-underline text-inherit"
 	style="--neon-glow: {glow}"
 >
@@ -121,7 +122,7 @@
 				<div
 					class="mt-0.5 text-xs text-muted-foreground line-clamp-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.7rem]"
 				>
-					{@html service.description_html}
+					{@html rebaseHtml(service.description_html)}
 				</div>
 			{:else if service.description}
 				<p class="mt-0.5 text-xs text-muted-foreground line-clamp-2">{service.description}</p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import SidebarIcon from "@lucide/svelte/icons/sidebar";
 	import SearchIcon from "@lucide/svelte/icons/search";
 	import SunIcon from "@lucide/svelte/icons/sun";
@@ -46,7 +47,7 @@
 			<SidebarIcon />
 		</Button>
 		<Separator orientation="vertical" class="mx-2 h-4" />
-		<a href="/" class="flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80 shrink-0">
+		<a href={withBase('/')} class="flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80 shrink-0">
 			{#if $siteMetaLoading}
 				<div class="bg-muted flex size-6 items-center justify-center rounded-md animate-pulse"></div>
 				<span class="hidden sm:inline h-4 w-24 bg-muted rounded animate-pulse"></span>

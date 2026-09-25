@@ -1,6 +1,7 @@
 pub(crate) mod data;
 mod embed;
 pub(crate) mod nav;
+mod shell;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -223,8 +224,8 @@ pub fn generate_site(
     // 8. Copy static assets (images, etc.) from doc folders to output
     let asset_count = copy_doc_assets(dir, output_dir, schema)?;
 
-    // 9. Write per-route index.html for static server compatibility
-    let fallback_count = write_fallback_pages(dir, output_dir, &docs, &by_type, org, schema)?;
+    // 9. Write root + per-route index.html shells (subpath-aware)
+    let fallback_count = write_html_shells(dir, output_dir, &docs, &by_type, org, schema)?;
 
     Ok(spa_count + data_count + asset_count + fallback_count)
 }
@@ -295,9 +296,11 @@ fn copy_doc_assets(
     Ok(count)
 }
 
-/// Write a copy of index.html into each SPA route directory so plain static
-/// servers (e.g. `python3 -m http.server`) can serve deep links without 404.
-fn write_fallback_pages(
+/// Write the root `index.html` plus a copy in each SPA route directory so
+/// plain static servers (e.g. `python3 -m http.server`) serve deep links
+/// without 404. Each copy detects its hosting base path at runtime, so the
+/// site works at the domain root and under any subpath (see `shell.rs`).
+fn write_html_shells(
     project_dir: &Path,
     output_dir: &Path,
     docs: &[(String, Document)],
@@ -305,8 +308,8 @@ fn write_fallback_pages(
     org: Option<&OrgConfig>,
     schema: &crate::schema::Schema,
 ) -> crate::error::Result<usize> {
-    let index_html = std::fs::read(output_dir.join("index.html"))
-        .map_err(|_| crate::error::Error::WriteFailed(output_dir.join("index.html")))?;
+    let template = embed::index_template()
+        .ok_or_else(|| crate::error::Error::WriteFailed(output_dir.join("index.html")))?;
 
     let mut routes: Vec<String> = vec![
         "roadmap".into(),
@@ -390,11 +393,38 @@ fn write_fallback_pages(
         routes.push(format!("tags/{}", tag));
     }
 
-    let mut count = 0;
+    // First path segment of every SPA route: lets a shell served for a URL it
+    // wasn't written for (SPA fallback) still locate the hosting base path.
+    let mut top_segments: std::collections::BTreeSet<String> = [
+        "graph",
+        "kanban",
+        "roadmap",
+        "onboarding",
+        "org",
+        "services",
+        "software",
+        "tags",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    for route in &routes {
+        if let Some(seg) = route.split('/').next() {
+            top_segments.insert(seg.to_lowercase());
+        }
+    }
+    let top_segments: Vec<String> = top_segments.into_iter().collect();
+
+    write_atomic(
+        &output_dir.join("index.html"),
+        shell::localize_shell(&template, "", &top_segments).as_bytes(),
+    )?;
+    let mut count = 1;
     for route in &routes {
         let dir = output_dir.join(route);
         std::fs::create_dir_all(&dir).map_err(|_| crate::error::Error::WriteFailed(dir.clone()))?;
-        write_atomic(&dir.join("index.html"), &index_html)?;
+        let html = shell::localize_shell(&template, route, &top_segments);
+        write_atomic(&dir.join("index.html"), html.as_bytes())?;
         count += 1;
     }
     Ok(count)

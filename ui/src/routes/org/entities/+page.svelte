@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { orgData, orgLoading } from '$lib/stores/org';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import Building2Icon from '@lucide/svelte/icons/building-2';
@@ -22,7 +23,7 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#each entities as [id, org] (id)}
-				<a href="/org/{id}" class="rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md">
+				<a href={withBase(`/org/${id}`)} class="rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md">
 					<div class="flex items-center gap-3">
 						<Building2Icon class="size-5 text-muted-foreground shrink-0" />
 						<div>

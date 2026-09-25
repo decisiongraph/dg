@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { siteMeta } from '$lib/stores/site-meta';
 	import FileCode2Icon from '@lucide/svelte/icons/file-code-2';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
@@ -17,7 +18,7 @@
 	async function openLocally(e: MouseEvent) {
 		if (!isLocalDev) return;
 		e.preventDefault();
-		await fetch(`/__dg/open?path=${encodeURIComponent(path)}`, { method: 'POST' });
+		await fetch(withBase(`/__dg/open?path=${encodeURIComponent(path)}`), { method: 'POST' });
 	}
 </script>
 

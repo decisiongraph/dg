@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { orgData, orgLoading } from '$lib/stores/org';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
@@ -129,7 +130,7 @@
 					{#each activeUsers as [handle, user]}
 						<Table.Row class={isInactive(user.status) ? 'opacity-60' : ''}>
 							<Table.Cell class="px-4">
-								<a href="/org/users/{handle}" class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
+								<a href={withBase(`/org/users/${handle}`)} class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
 									<UserAvatar {handle} name={user.name} avatarUrl={user.avatar_url} size="sm" />
 									@{handle}
 								</a>
@@ -148,7 +149,7 @@
 							<Table.Cell class="px-4">
 								<div class="flex flex-wrap gap-1">
 									{#each user.teams as teamId}
-										<Badge variant="secondary" href="/org/teams/{teamId}">{teamId}</Badge>
+										<Badge variant="secondary" href={withBase(`/org/teams/${teamId}`)}>{teamId}</Badge>
 									{/each}
 								</div>
 							</Table.Cell>
@@ -216,7 +217,7 @@
 							{#each departedUsers as [handle, user]}
 								<Table.Row>
 									<Table.Cell class="px-4">
-										<a href="/org/users/{handle}" class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
+										<a href={withBase(`/org/users/${handle}`)} class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
 											<UserAvatar {handle} name={user.name} avatarUrl={user.avatar_url} size="sm" />
 											@{handle}
 										</a>
@@ -235,7 +236,7 @@
 									<Table.Cell class="px-4">
 										<div class="flex flex-wrap gap-1">
 											{#each user.teams as teamId}
-												<Badge variant="secondary" href="/org/teams/{teamId}">{teamId}</Badge>
+												<Badge variant="secondary" href={withBase(`/org/teams/${teamId}`)}>{teamId}</Badge>
 											{/each}
 										</div>
 									</Table.Cell>
@@ -269,7 +270,7 @@
 						{#each aiUsers as [handle, user]}
 							<Table.Row>
 								<Table.Cell class="px-4">
-									<a href="/org/users/{handle}" class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
+									<a href={withBase(`/org/users/${handle}`)} class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
 										<UserAvatar {handle} name={user.name} avatarUrl={user.avatar_url} size="sm" />
 										@{handle}
 									</a>

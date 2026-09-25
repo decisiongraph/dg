@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import type { ComponentProps } from "svelte";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 	import NavMain from "./nav-main.svelte";
@@ -59,7 +60,7 @@
 						<Sidebar.MenuItem>
 							<Sidebar.MenuButton tooltipContent="Introduction">
 								{#snippet child({ props })}
-									<a href="/" {...props}>
+									<a href={withBase('/')} {...props}>
 										<HomeIcon class="size-4" />
 										<span>Introduction</span>
 									</a>
@@ -69,7 +70,7 @@
 						<Sidebar.MenuItem>
 							<Sidebar.MenuButton tooltipContent="Getting Started">
 								{#snippet child({ props })}
-									<a href="/onboarding/" {...props}>
+									<a href={withBase('/onboarding/')} {...props}>
 										<BookOpenIcon class="size-4" />
 										<span>Getting Started</span>
 									</a>
@@ -97,7 +98,7 @@
 							<Sidebar.MenuItem>
 								<Sidebar.MenuButton tooltipContent={item.label}>
 									{#snippet child({ props })}
-										<a href={item.href} {...props}>
+										<a href={withBase(item.href)} {...props}>
 											<item.Icon class="size-4" />
 											<span>{item.label}</span>
 										</a>
@@ -134,7 +135,7 @@
 										<Sidebar.MenuButton tooltipContent={item.label}>
 											{#snippet child({ props })}
 												{@const LeadIcon = leafIconMap[item.label]}
-												<a href="/{item.href}" {...props}>
+												<a href={withBase(`/${item.href}`)} {...props}>
 													{#if LeadIcon}
 														<LeadIcon class="size-4" />
 													{/if}
@@ -166,7 +167,7 @@
 							<Sidebar.MenuButton size="sm" tooltipContent={item.label}>
 								{#snippet child({ props })}
 									{@const FooterIcon = leafIconMap[item.label]}
-									<a href="/{item.href}" {...props}>
+									<a href={withBase(`/${item.href}`)} {...props}>
 										{#if FooterIcon}
 											<FooterIcon class="size-4" />
 										{/if}

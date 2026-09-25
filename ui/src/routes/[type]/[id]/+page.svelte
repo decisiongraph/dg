@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { allDocs, docsLoading, docTypes } from '$lib/stores/docs';
 	import { orgData } from '$lib/stores/org';
@@ -448,7 +449,7 @@
 						<span class="mt-0.5 text-lg leading-none">📋</span>
 						<div>
 							<p class="font-semibold text-foreground">
-								<a href="/{folder}/{bl.id.toLowerCase()}" class="text-primary underline hover:text-primary/80">{bl.id}</a> proposes to supersede this document
+								<a href={withBase(`/${folder}/${bl.id.toLowerCase()}`)} class="text-primary underline hover:text-primary/80">{bl.id}</a> proposes to supersede this document
 							</p>
 							{#if supersedingDoc.title}
 								<p class="mt-1 text-sm text-muted-foreground">{supersedingDoc.title}</p>
@@ -476,7 +477,7 @@
 									{@const refType = ref.split('-')[0]?.toLowerCase()}
 									{@const folder = typeFolder(refType)}
 									{#if i > 0}, {/if}
-									<a href="/{folder}/{ref.toLowerCase()}" class="font-medium text-primary underline hover:text-primary/80">{ref}</a>
+									<a href={withBase(`/${folder}/${ref.toLowerCase()}`)} class="font-medium text-primary underline hover:text-primary/80">{ref}</a>
 								{/each}
 							</p>
 						{/if}
@@ -505,7 +506,7 @@
 							{/if}
 							{#if doc.tags}
 								{#each doc.tags as tag}
-									<a href="/tags/{tag}" class="no-underline">
+									<a href={withBase(`/tags/${tag}`)} class="no-underline">
 									<Badge variant="secondary" class="cursor-pointer hover:bg-secondary/80">#{tag}</Badge>
 								</a>
 								{/each}
@@ -544,7 +545,7 @@
 									{#each handles as handle, i}
 										{@const u = resolveUser(handle)}
 										{#if i > 0}<span class="text-muted-foreground/50">,</span>{/if}
-										<a href="/org/users/{handle}" class="inline-flex items-center gap-1 no-underline hover:text-foreground transition-colors">
+										<a href={withBase(`/org/users/${handle}`)} class="inline-flex items-center gap-1 no-underline hover:text-foreground transition-colors">
 											<UserAvatar {handle} name={u?.name ?? handle} avatarUrl={u?.avatar_url} size="sm" />
 											<span>{u?.name ?? `@${handle}`}</span>
 										</a>
@@ -639,7 +640,7 @@
 								Related documents
 							</h2>
 							<a
-								href="/graph?focus={doc.id.toLowerCase()}"
+								href={withBase(`/graph?focus=${doc.id.toLowerCase()}`)}
 								class="text-xs text-primary hover:underline"
 							>
 								View in full graph →

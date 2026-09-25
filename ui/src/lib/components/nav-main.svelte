@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { stripBase, withBase } from '$lib/url';
 	import ChevronRightIcon from "@lucide/svelte/icons/chevron-right";
 	import BoxesIcon from "@lucide/svelte/icons/boxes";
 	import LightbulbIcon from "@lucide/svelte/icons/lightbulb";
@@ -62,7 +63,7 @@
 
 	function isActive(href: string | undefined): boolean {
 		if (href == null) return false;
-		const current = page.url.pathname;
+		const current = stripBase(page.url.pathname);
 		const norm = "/" + href.replace(/^\//, "").replace(/index\.html$/, "").replace(/\/$/, "");
 		const normCurrent = current.replace(/\/$/, "") || "/";
 		return normCurrent === norm || normCurrent === norm + "/";
@@ -79,7 +80,7 @@
 	<Sidebar.Group>
 		<Sidebar.GroupLabel>
 			{#if group.href}
-				<a href="/{group.href}" class="flex items-center gap-2">
+				<a href={withBase(`/${group.href}`)} class="flex items-center gap-2">
 					<Icon class="size-4" />
 					{cleanLabel(group.label)}
 				</a>
@@ -102,7 +103,7 @@
 									<Sidebar.MenuButton tooltipContent={parsed.name} isActive={isActive(navItem.href)}>
 										{#snippet child({ props: btnProps })}
 											{#if navItem.href}
-												<a href="/{navItem.href}" {...btnProps}>
+												<a href={withBase(`/${navItem.href}`)} {...btnProps}>
 													{#if ChildIcon}<ChildIcon class="size-4" />{/if}
 													<span>{parsed.name}</span>
 												</a>
@@ -143,7 +144,7 @@
 													<Sidebar.MenuSubItem>
 														<Sidebar.MenuSubButton isActive={isActive(subItem.href)}>
 															{#snippet child({ props: subProps })}
-																<a href="/{subItem.href}" {...subProps} class={subItem.label.startsWith('deprecated:') ? 'opacity-60' : ''}>
+																<a href={withBase(`/${subItem.href}`)} {...subProps} class={subItem.label.startsWith('deprecated:') ? 'opacity-60' : ''}>
 																	<span>{cleanLabel(subItem.label)}</span>
 																</a>
 															{/snippet}
@@ -160,7 +161,7 @@
 						<Sidebar.MenuItem>
 							<Sidebar.MenuButton tooltipContent={parsed.name} isActive={isActive(navItem.href)}>
 								{#snippet child({ props: btnProps })}
-									<a href="/{navItem.href}" {...btnProps}>
+									<a href={withBase(`/${navItem.href}`)} {...btnProps}>
 										{#if ChildIcon}<ChildIcon class="size-4" />{/if}
 										<span>{parsed.name}</span>
 									</a>
