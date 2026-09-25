@@ -73,9 +73,9 @@ graph TD
 <!-- dg:services:start -->
 | Service | Status | Owner | Stack | Description |
 |---------|--------|-------|-------|-------------|
-| [API Gateway](services/api/README.md) | Live | @bob | TypeScript (+1) |  |
-| [Auth Service](services/auth-service/README.md) | Live | @dave | Go (+2) |  |
-| [Data Platform](services/data-platform/README.md) | Beta | @eve | Python (+1) |  |
+| API Gateway | Live | @bob | TypeScript (+1) |  |
+| Auth Service | Live | @dave | Go (+2) |  |
+| Data Platform | Beta | @eve | Python (+1) |  |
 <!-- dg:services:end -->
 ## Teams
 

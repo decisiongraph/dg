@@ -34,6 +34,20 @@ pub fn validate_directory(
         known_ids.insert(crate::graph::path_to_id_with_schema(path, schema));
     }
 
+    // Top-level repository root (or the dg root) for local link checks
+    let repo_root = super::links::find_repo_root(dir);
+    let is_doc_id = |s: &str| schema.is_valid_id(s);
+    let add_link_diags = |mut fr: FileResult, path: &Path, doc: &Document| {
+        let doc_dir = path
+            .parent()
+            .and_then(|p| p.canonicalize().ok())
+            .unwrap_or_else(|| repo_root.clone());
+        fr.diagnostics.extend(super::links::check_local_links(
+            &doc.body, &doc_dir, &repo_root, &is_doc_id,
+        ));
+        fr
+    };
+
     // Validate files in parallel — all shared state is read-only
     #[allow(clippy::type_complexity)]
     let per_file: Vec<(Option<FileResult>, Option<(String, String)>)> = files
@@ -67,7 +81,8 @@ pub fn validate_directory(
                 .iter()
                 .find(|t| t.singleton && singleton_matches(t, filename, rel_path))
             {
-                return (Some(validate_singleton(&doc, type_def, user_config)), None);
+                let fr = validate_singleton(&doc, type_def, user_config);
+                return (Some(add_link_diags(fr, path, &doc)), None);
             }
 
             let doc_id = crate::graph::path_to_id(path);
@@ -87,7 +102,7 @@ pub fn validate_directory(
 
             let type_entry = (path.display().to_string(), type_name);
             let result = validate_document(&doc, schema, &known_files, &known_ids, user_config);
-            (Some(result), Some(type_entry))
+            (Some(add_link_diags(result, path, &doc)), Some(type_entry))
         })
         .collect();
 

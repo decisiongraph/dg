@@ -1,5 +1,3 @@
-use regex::Regex;
-
 use super::{Diagnostic, Severity};
 
 /// Detect markdown table syntax that comrak failed to parse as a `<table>`.
@@ -70,34 +68,27 @@ pub(crate) fn check_broken_tables(body: &str, diags: &mut Vec<Diagnostic>) {
 
 /// Check that local image references use docs/assets/ as their path.
 ///
-/// Matches `![alt](path)` and `<img src="path"` patterns, skipping
-/// external URLs (http://, https://) and absolute paths.
+/// Covers `![alt](path)` and `<img src="path">` (outside code blocks),
+/// skipping external URLs and absolute paths — those are handled by the
+/// link checks in [`super::links`] (C020–C023).
 pub(crate) fn check_image_paths(body: &str, diags: &mut Vec<Diagnostic>) {
-    // Match markdown images: ![...](path)
-    let md_re = Regex::new(r"!\[[^\]]*\]\(([^)]+)\)").unwrap();
-    let html_re = Regex::new(r#"<img\s[^>]*src=["']([^"']+)["']"#).unwrap();
-    for (line_num, line) in body.lines().enumerate() {
-        for cap in md_re.captures_iter(line) {
-            let path = cap[1].split_whitespace().next().unwrap_or("");
-            check_single_image_path(path, line_num + 1, diags);
-        }
-        // Match HTML images: <img src="path" or <img src='path'
-        if line.contains("<img") {
-            for cap in html_re.captures_iter(line) {
-                check_single_image_path(&cap[1], line_num + 1, diags);
-            }
+    for link in super::links::extract_body_links(body) {
+        if link.is_image {
+            check_single_image_path(&link.url, link.line, diags);
         }
     }
 }
 
-fn check_single_image_path(path: &str, line_num: usize, diags: &mut Vec<Diagnostic>) {
-    // Skip external URLs
-    if path.starts_with("http://") || path.starts_with("https://") {
-        return;
-    }
-    // Normalize: strip leading ./ and resolve ../
-    let normalized = path.trim_start_matches("./");
+fn check_single_image_path(url: &str, line_num: usize, diags: &mut Vec<Diagnostic>) {
+    let path = match super::links::classify_link(url) {
+        super::links::LinkTarget::Local {
+            path,
+            absolute: false,
+        } => path,
+        _ => return,
+    };
     // Valid paths: docs/assets/... or ../assets/... (relative from docs subdir)
+    let normalized = path.trim_start_matches("./");
     let is_valid = normalized.starts_with("docs/assets/")
         || normalized.starts_with("../assets/")
         || normalized.starts_with("assets/");
@@ -105,7 +96,7 @@ fn check_single_image_path(path: &str, line_num: usize, diags: &mut Vec<Diagnost
         diags.push(Diagnostic {
             severity: Severity::Error,
             code: "C002".into(),
-            message: format!("image path \"{path}\" is not in docs/assets/"),
+            message: format!("image path \"{url}\" is not in docs/assets/"),
             location: format!("body line {line_num}"),
             hint: Some("move the image to docs/assets/ and update the reference".into()),
         });

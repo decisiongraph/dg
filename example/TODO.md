@@ -40,3 +40,6 @@ It would be neat if user has logged in that the documents could be viewed in the
 
 # Research question: Can we somehow how doc-coverage as we have the automatic test-coverage?
 It would help to notice areas which are not yet documented
+
+# Verify other links in a non-intrusive way
+`dg validate` checks local links (C020–C023) and `--check-links` DNS-resolves external hosts (C024/C025). Still unchecked: `#anchor` fragments vs heading slugs, `mailto:` syntax, and dead external pages (opt-in cached HTTP HEAD, rate-limited, so default validation stays offline and fast).

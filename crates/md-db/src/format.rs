@@ -149,6 +149,14 @@ pub fn format_file(path: &Path, schema: &Schema, dry_run: bool) -> Result<Vec<Fo
         }
     }
 
+    // Rewrite absolute filesystem links inside the repo to relative paths (C022)
+    if let Some(n) = rewrite_absolute_links(&mut doc, path) {
+        changes.push(FormatChange {
+            path: path.to_path_buf(),
+            description: format!("rewrote {n} absolute link path(s) as relative"),
+        });
+    }
+
     // Format frontmatter field order and grouping
     if let Some(ref fm) = doc.frontmatter {
         let grouped = fm.to_grouped_yaml(type_def, schema);
@@ -182,6 +190,27 @@ pub fn format_file(path: &Path, schema: &Schema, dry_run: bool) -> Result<Vec<Fo
     }
 
     Ok(changes)
+}
+
+/// Rewrite absolute links pointing inside the repository into doc-relative
+/// paths. Returns the number of rewritten links.
+fn rewrite_absolute_links(doc: &mut Document, path: &Path) -> Option<usize> {
+    use crate::validation::links;
+    let has_absolute = links::extract_body_links(&doc.body).iter().any(|l| {
+        matches!(
+            links::classify_link(&l.url),
+            links::LinkTarget::Local { absolute: true, .. }
+        )
+    });
+    if !has_absolute {
+        return None;
+    }
+    let doc_dir = path.parent()?.canonicalize().ok()?;
+    let repo_root = links::find_repo_root(&doc_dir);
+    let (body, n) = links::rewrite_absolute_links(&doc.body, &doc_dir, &repo_root)?;
+    doc.body = body;
+    doc.rebuild_raw();
+    Some(n)
 }
 
 /// Infer document type from file path by matching against schema folder definitions.
