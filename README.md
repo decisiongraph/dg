@@ -147,11 +147,22 @@ dg set OPP-001 --section Decision --content-file notes.md  # Read from file
 dg set OPP-001 --section Timeline --add-row "10:30,Restored,@ops"
 dg set OPP-001 --remove tags                      # Remove a field
 
+# Delete
+dg delete OPP-001
+
 # Validate & lint
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes
 dg validate --no-install             # Don't auto-install deps / start devenv services before checks
+dg validate --check-links            # Also DNS-resolve external link hostnames (C024/C025, network)
 dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
+dg lint --check-links                # Same opt-in DNS check for external links
+# Local links/images/attachments in doc bodies are resolved against the file:
+# missing targets are errors (C020); targets outside the top-level git repo
+# (superproject when docs live in a submodule; .dg root outside git) warn
+# (C021), attachments (images, csv, xlsx, pdf, ...) outside it suggest moving
+# into docs/assets/ (C023), and absolute filesystem paths warn with the
+# relative path (C022) — `dg fmt` rewrites those inside the repo automatically.
 # GitHub-hosted projects: warns when detected package ecosystems (cargo, npm, mix,
 # docker, terraform, opentofu, nix, ...) lack .github/dependabot.yml coverage
 # (SV011/SV012) — OpenTofu is told apart from Terraform via .tofu files,
@@ -211,6 +222,31 @@ dg fmt                               # Auto-format documents to schema order
 dg renumber                          # Reorder document IDs chronologically
 dg coverage                          # Coverage metrics by type/status
 dg team list                         # Show orgs, teams, users
+```
+
+## External document hooks
+
+Executable scripts in `.dg/hooks/on_create`, `.dg/hooks/on_update`, and
+`.dg/hooks/on_delete` receive document notifications from CLI mutations. Each
+script is invoked from the project root with `<document-id> <event-type>`
+arguments. Create and delete hooks receive the affected document JSON on
+stdin; delete receives the document as it existed before removal.
+
+Update hooks receive an object containing `before`, `after`, and `diff`, where
+`diff` uses the same `field_changes` and `section_changes` structure as
+`dg diff`. Hook failures are reported as warnings and do not roll back or
+fail the document mutation.
+
+Hooks fire after `dg new`, `set`, `delete`, `fmt`, `renumber`, `team`,
+`generate` and `import` (not on `--dry-run`/`--check`). A renumber shows up as
+delete + create. Hooks run directly (no shell), so they need a shebang and the
+executable bit; missing or non-executable hooks are skipped. Hook stdout is
+discarded; stderr is shown when the hook exits non-zero.
+
+```bash
+#!/usr/bin/env bash
+# .dg/hooks/on_update
+exec my-tool dg-changed "$@"   # $1=ADR-001 $2=update, JSON on stdin
 ```
 
 ## Field assignment rules

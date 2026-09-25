@@ -5,6 +5,7 @@
 	import { enrichUserMentions } from '$lib/actions/user-mentions';
 	import { orgData } from '$lib/stores/org';
 	import CodeCopyButton from '$lib/components/CodeCopyButton.svelte';
+	import { rebaseHtml, withBase } from '$lib/url';
 
 	interface Props {
 		html: string;
@@ -36,7 +37,7 @@
 
 		while ((match = regex.exec(html)) !== null) {
 			if (match.index > lastIndex) {
-				result.push({ type: 'html', content: html.slice(lastIndex, match.index) });
+				result.push({ type: 'html', content: rebaseHtml(html.slice(lastIndex, match.index)) });
 			}
 			const lang = match[1] as 'mermaid' | 'd2';
 			const raw = decodeEntities(match[2]);
@@ -45,7 +46,7 @@
 		}
 
 		if (lastIndex < html.length) {
-			result.push({ type: 'html', content: html.slice(lastIndex) });
+			result.push({ type: 'html', content: rebaseHtml(html.slice(lastIndex)) });
 		}
 
 		return result;
@@ -128,7 +129,7 @@
 		if (d2LoadError) throw new Error(d2LoadError);
 		try {
 			const load = new Function('url', 'return import(url)');
-			d2Module = await load('/data/d2/d2-browser.js');
+			d2Module = await load(withBase('/data/d2/d2-browser.js'));
 			return d2Module!;
 		} catch (err) {
 			d2LoadError = err instanceof Error ? err.message : String(err);

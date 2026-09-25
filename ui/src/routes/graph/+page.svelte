@@ -11,6 +11,7 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { goto } from '$app/navigation';
+	import { withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { graphNodes, graphEdges, graphLoading } from '$lib/stores/graph';
 	import { docTypes } from '$lib/stores/docs';
@@ -326,7 +327,7 @@
 
 	function onNodeClick({ node }: { node: Node; event: MouseEvent | TouchEvent }) {
 		const docType = node.data.docType as string;
-		goto(`/${typeFolder(docType)}/${node.id.toLowerCase()}`);
+		goto(withBase(`/${typeFolder(docType)}/${node.id.toLowerCase()}`));
 	}
 
 
@@ -346,7 +347,7 @@
 				class="h-7 rounded-full px-2.5 text-[11px]"
 				onclick={() => {
 					focusId = null;
-					goto('/graph', { replaceState: true });
+					goto(withBase('/graph'), { replaceState: true });
 				}}
 			>
 				Focused on {focusId} ✕

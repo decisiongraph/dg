@@ -60,7 +60,7 @@ pub fn search_documents(
         .build()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file())
-        .filter(|e| !discovery::is_ignored_dir(e.path()))
+        .filter(|e| !discovery::is_ignored_dir(dir, e.path()))
         .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
         .map(|e| e.into_path())
         .collect();

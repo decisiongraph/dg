@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { orgData, orgLoading } from '$lib/stores/org';
 	import SourceFileLink from '$lib/components/SourceFileLink.svelte';
@@ -24,7 +25,7 @@
 
 		{#if org.parent}
 			<div class="mb-4 text-sm text-muted-foreground">
-				Parent: <a href="/org/{org.parent}" class="text-primary hover:underline">{$orgData?.orgs[org.parent]?.name ?? org.parent}</a>
+				Parent: <a href={withBase(`/org/${org.parent}`)} class="text-primary hover:underline">{$orgData?.orgs[org.parent]?.name ?? org.parent}</a>
 			</div>
 		{/if}
 
@@ -34,7 +35,7 @@
 				<div class="grid gap-3 sm:grid-cols-2">
 					{#each org.children as childId}
 						{@const child = $orgData?.orgs[childId]}
-						<a href="/org/{childId}" class="rounded-lg border border-border bg-card p-4 hover:shadow-md transition-shadow">
+						<a href={withBase(`/org/${childId}`)} class="rounded-lg border border-border bg-card p-4 hover:shadow-md transition-shadow">
 							<div class="font-semibold text-foreground">{child?.name ?? childId}</div>
 						</a>
 					{/each}
@@ -53,7 +54,7 @@
 				<h2 class="text-lg font-semibold text-foreground mb-3">Teams</h2>
 				<div class="grid gap-3 sm:grid-cols-2">
 					{#each orgTeams as [teamId, team]}
-						<a href="/org/teams/{teamId}" class="rounded-lg border border-border bg-card p-4 hover:shadow-md transition-shadow {team.status === 'deprecated' ? 'opacity-50' : ''}">
+						<a href={withBase(`/org/teams/${teamId}`)} class="rounded-lg border border-border bg-card p-4 hover:shadow-md transition-shadow {team.status === 'deprecated' ? 'opacity-50' : ''}">
 							<div class="font-semibold text-foreground">{team.name}</div>
 							<div class="text-xs text-muted-foreground">{team.members.length} members</div>
 						</a>

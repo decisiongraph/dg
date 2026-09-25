@@ -141,7 +141,7 @@ pub fn detect_ecosystems(root: &Path) -> EcosystemScan {
             Ok(r) => r,
             Err(_) => continue,
         };
-        if crate::discovery::is_ignored_dir(rel) {
+        if crate::discovery::is_ignored_dir(root, path) {
             continue;
         }
         let name = match path.file_name().and_then(|n| n.to_str()) {

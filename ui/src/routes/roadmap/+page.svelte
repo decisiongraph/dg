@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { RoadmapData } from '$lib/types';
 	import { goto } from '$app/navigation';
+	import { withBase } from '$lib/url';
 	import { docTypes } from '$lib/stores/docs';
 	import HtmlContent from '$lib/components/HtmlContent.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
@@ -66,7 +67,7 @@
 		const folder = resolveFolder(prefix);
 
 		event.preventDefault();
-		goto(`/${folder}/${docId}`);
+		goto(withBase(`/${folder}/${docId}`));
 	}
 </script>
 

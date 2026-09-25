@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import * as BC from '$lib/components/ui/breadcrumb/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { allDocs, docTypes } from '$lib/stores/docs';
@@ -30,7 +31,7 @@
 <BC.Root class="mb-4">
 	<BC.List>
 		<BC.Item>
-			<BC.Link href="/">Home</BC.Link>
+			<BC.Link href={withBase('/')}>Home</BC.Link>
 		</BC.Item>
 		{#each crumbs as crumb, i (i)}
 			<BC.Separator />
@@ -47,12 +48,12 @@
 							</DropdownMenu.Trigger>
 							<DropdownMenu.Content align="start">
 								<DropdownMenu.Label>
-									<a href={crumb.href} class="hover:underline">{crumb.label}</a>
+									<a href={withBase(crumb.href)} class="hover:underline">{crumb.label}</a>
 								</DropdownMenu.Label>
 								<DropdownMenu.Separator />
 								{#each docs as doc (doc.id)}
 									<DropdownMenu.Item>
-										<a href={doc.href} class="block w-full">
+										<a href={withBase(doc.href)} class="block w-full">
 											<span class="font-mono text-xs text-muted-foreground">{doc.id}</span>
 											<span class="ml-2 text-sm">{doc.title}</span>
 										</a>
@@ -61,7 +62,7 @@
 							</DropdownMenu.Content>
 						</DropdownMenu.Root>
 					{:else}
-						<BC.Link href={crumb.href}>{crumb.label}</BC.Link>
+						<BC.Link href={withBase(crumb.href)}>{crumb.label}</BC.Link>
 					{/if}
 				{:else}
 					<BC.Page>{crumb.label}</BC.Page>

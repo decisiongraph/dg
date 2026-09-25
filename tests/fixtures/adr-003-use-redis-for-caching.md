@@ -8,7 +8,7 @@ caused_by: "INC-001"
 
 # Use Redis for Caching
 
-Redis will be our caching layer, building on [ADR-001](./adr-001.md) database choice and the [REST API decision](./adr-002.md).
+Redis will be our caching layer, building on [ADR-001](./adr-001-use-postgresql.md) database choice and the [REST API decision](./adr-002-use-rest-api.md).
 
 ## Decision
 

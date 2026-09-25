@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { docTypes, allDocs, docsLoading } from '$lib/stores/docs';
 	import { siteMeta } from '$lib/stores/site-meta';
 	import { orgData } from '$lib/stores/org';
@@ -565,7 +566,7 @@
 	function onMiniNodeClick({ node }: { node: Node; event: MouseEvent | TouchEvent }) {
 		const type = docTypeFromId(node.id);
 		const folder = $docTypes[type]?.folder ?? type;
-		goto(`/${folder}/${node.id.toLowerCase()}`);
+		goto(withBase(`/${folder}/${node.id.toLowerCase()}`));
 	}
 </script>
 
@@ -674,7 +675,7 @@
 					<div class="rounded-lg border border-border bg-card p-5 shadow-sm">
 						<div class="flex items-center justify-between mb-2">
 							<a
-								href="/{info?.folder ?? card.key}"
+								href={withBase(`/${info?.folder ?? card.key}`)}
 								class="text-base font-semibold text-primary hover:underline flex items-center gap-2"
 							>
 								{#if CardIcon}<CardIcon class="size-4" />{/if}
@@ -702,7 +703,7 @@
 						</div>
 							{#if $allDocs.filter((d) => d.type === card.key).length > 0}
 							<div class="mt-3 text-xs">
-								<a href="/{info?.folder ?? card.key}" class="text-primary hover:underline">
+								<a href={withBase(`/${info?.folder ?? card.key}`)} class="text-primary hover:underline">
 									Your project has {$allDocs.filter((d) => d.type === card.key).length}
 									{card.title.toLowerCase()}
 									{$allDocs.filter((d) => d.type === card.key).length === 1 ? 'document' : 'documents'}.
@@ -730,7 +731,7 @@
 					<div class="rounded-lg border border-border bg-card p-5 shadow-sm">
 						<div class="flex items-center justify-between mb-2">
 							<a
-								href="/{ct.folder}"
+								href={withBase(`/${ct.folder}`)}
 								class="text-base font-semibold text-primary hover:underline flex items-center gap-2"
 							>
 								<FolderIcon class="size-4" />
@@ -745,7 +746,7 @@
 						{/if}
 						{#if docCount > 0}
 							<div class="mt-3 text-xs">
-								<a href="/{ct.folder}" class="text-primary hover:underline">
+								<a href={withBase(`/${ct.folder}`)} class="text-primary hover:underline">
 									Your project has {docCount}
 									{ct.title.toLowerCase()}
 									{docCount === 1 ? 'document' : 'documents'}.
@@ -843,7 +844,7 @@
 				<h2 class="text-lg font-semibold text-foreground mb-2">Example: how a document connects</h2>
 				<p class="text-sm text-muted-foreground mb-4">
 					The most connected document in your project is
-					<a href="/{$docTypes[docTypeFromId(miniGraphData.bestId)]?.folder ?? docTypeFromId(miniGraphData.bestId)}/{miniGraphData.bestId.toLowerCase()}" class="text-primary font-medium hover:underline">{miniGraphData.bestId}</a>
+					<a href={withBase(`/${$docTypes[docTypeFromId(miniGraphData.bestId)]?.folder ?? docTypeFromId(miniGraphData.bestId)}/${miniGraphData.bestId.toLowerCase()}`)} class="text-primary font-medium hover:underline">{miniGraphData.bestId}</a>
 					({miniGraphData.centerNode?.title}) with {miniGraphData.bestCount} connections.
 					{#if miniGraphData.neighborEdges.some((e) => e.relation === 'enables')}
 						It enables opportunities,
@@ -920,7 +921,7 @@
 					<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
 						{#each activeTeams as [id, team]}
 							<a
-								href="/org/teams/{id}"
+								href={withBase(`/org/teams/${id}`)}
 								class="rounded-lg border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
 							>
 								<div class="font-semibold text-foreground">{team.name}</div>
@@ -971,10 +972,10 @@
 									<tr class="border-b border-border/50">
 										<td class="py-2 pr-4 text-foreground" use:enrichContentRefs>{task.description}</td>
 										<td class="py-2 pr-4">
-											<a href="/{folder}/{task.doc_id.toLowerCase()}" class="text-primary hover:underline font-mono text-xs">{task.doc_id}</a>
+											<a href={withBase(`/${folder}/${task.doc_id.toLowerCase()}`)} class="text-primary hover:underline font-mono text-xs">{task.doc_id}</a>
 										</td>
 										<td class="py-2 pr-4">
-											<a href="/org/users/{task.owner}" class="text-primary hover:underline text-xs">@{task.owner}</a>
+											<a href={withBase(`/org/users/${task.owner}`)} class="text-primary hover:underline text-xs">@{task.owner}</a>
 										</td>
 										<td class="py-2 pr-4">
 											<StatusBadge status={task.status} />
@@ -986,7 +987,7 @@
 						</table>
 						{#if openTasks.length > 5}
 							<p class="text-xs text-muted-foreground mt-2">
-								...and {openTasks.length - 5} more. See all assignments on the <a href="/kanban" class="text-primary hover:underline">kanban board</a>.
+								...and {openTasks.length - 5} more. See all assignments on the <a href={withBase('/kanban')} class="text-primary hover:underline">kanban board</a>.
 							</p>
 						{/if}
 					</div>
@@ -1006,7 +1007,7 @@
 					<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-2">
 						{#each allOrgs as [id, org]}
 							<a
-								href="/org/entities/{id}"
+								href={withBase(`/org/entities/${id}`)}
 								class="rounded-lg border border-border bg-card p-3 shadow-sm hover:shadow-md transition-shadow"
 							>
 								<div class="font-semibold text-foreground text-sm">{org.name}</div>

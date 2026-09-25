@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { allDocs, docTypes } from '$lib/stores/docs';
 	import * as HoverCard from '$lib/components/ui/hover-card/index.js';
 	import StatusBadge from './StatusBadge.svelte';
@@ -14,7 +15,7 @@
 
 	const refType = $derived(refId.split('-')[0]?.toLowerCase());
 	const folder = $derived($docTypes[refType]?.folder ?? refType);
-	const href = $derived(`/${folder}/${refId.toLowerCase()}`);
+	const href = $derived(withBase(`/${folder}/${refId.toLowerCase()}`));
 	const refDoc = $derived($allDocs.find((d) => d.id.toLowerCase() === refId.toLowerCase()));
 
 	const preview = $derived(refDoc?.body_html ? firstSection(refDoc.body_html) : undefined);

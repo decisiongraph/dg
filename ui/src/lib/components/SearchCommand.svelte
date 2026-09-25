@@ -2,6 +2,7 @@
 	import { searchOpen, searchQuery, searchResults } from '$lib/stores/search';
 	import { docTypes } from '$lib/stores/docs';
 	import { goto } from '$app/navigation';
+	import { withBase } from '$lib/url';
 	import * as Command from '$lib/components/ui/command/index.js';
 
 	let open = $derived($searchOpen);
@@ -33,10 +34,10 @@
 		setOpen(false);
 		query = '';
 		if (result.href) {
-			goto(result.href);
+			goto(withBase(result.href));
 		} else {
 			const folder = $docTypes[result.type]?.folder ?? result.type;
-			goto(`/${folder}/${result.id.toLowerCase()}`);
+			goto(withBase(`/${folder}/${result.id.toLowerCase()}`));
 		}
 	}
 

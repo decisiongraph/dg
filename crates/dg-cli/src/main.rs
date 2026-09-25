@@ -1,4 +1,5 @@
 mod commands;
+mod document_hooks;
 mod progress;
 
 use std::path::{Path, PathBuf};
@@ -139,6 +140,8 @@ fn run() -> Result<()> {
     let mut cache =
         md_db::cache::DocCache::load(&cache_path).unwrap_or_else(|_| md_db::cache::DocCache::new());
 
+    let document_snapshot = document_hooks::before_command(&root, &cli.command);
+
     let result = match cli.command {
         Command::Init { .. }
         | Command::Guide(_)
@@ -155,6 +158,7 @@ fn run() -> Result<()> {
             commands::site::run(&root, &schema, users.as_ref(), &args, &mut cache)
         }
         Command::New(args) => commands::new::run(&root, &schema, &args, &mut cache, users.as_ref()),
+        Command::Delete(args) => commands::delete::run(&root, &schema, &args),
         Command::List(args) => commands::list::run(&root, &schema, &args, users.as_ref()),
         Command::Show(args) => commands::show::run(&root, &schema, &args, &mut cache),
         Command::Refs(args) => commands::refs::run(&root, &schema, &args, &mut cache),
@@ -178,6 +182,11 @@ fn run() -> Result<()> {
         Command::Schema(args) => commands::schema_cmd::run(&root, &schema, &args),
         Command::History(args) => commands::history::run(&root, &schema, &args),
     };
+
+    // Notify external document hooks after command-side mutations.
+    if let Some(before) = document_snapshot {
+        document_hooks::after_command(&root, &schema, &before);
+    }
 
     // Save cache if modified
     if cache.is_dirty() {

@@ -1,5 +1,6 @@
 pub mod claude;
 pub mod coverage;
+pub mod delete;
 pub mod diff;
 pub mod export;
 pub mod fmt;
@@ -50,6 +51,8 @@ pub enum Command {
     },
     /// Create a new document
     New(new::NewArgs),
+    /// Delete a document
+    Delete(delete::DeleteArgs),
     /// List documents
     List(list::ListArgs),
     /// Show a document

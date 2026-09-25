@@ -28,6 +28,11 @@ pub struct ValidateArgs {
     /// before running tests/linters
     #[arg(long)]
     pub no_install: bool,
+
+    /// Also resolve hostnames of external http(s) links via DNS (network;
+    /// catches typo domains: C024/C025)
+    #[arg(long)]
+    pub check_links: bool,
 }
 
 pub fn run(
@@ -61,6 +66,12 @@ pub fn run(
         let outcome = validation::validate_service_checks(root, &opts);
         result.file_results.extend(outcome.file_results);
         check_timings = outcome.timings;
+    }
+
+    if args.check_links {
+        result
+            .file_results
+            .extend(check_external_links(root, pattern.as_deref())?);
     }
 
     // Filter out skipped diagnostic codes
@@ -134,4 +145,17 @@ pub fn print_check_durations(timings: &[validation::CheckTiming]) {
             c.secs, c.location, c.phase, c.tool, c.command
         );
     }
+}
+
+/// Opt-in DNS check of external link hostnames (shared with `dg lint`).
+pub fn check_external_links(
+    root: &Path,
+    pattern: Option<&str>,
+) -> Result<Vec<validation::FileResult>> {
+    if std::io::stderr().is_terminal() {
+        eprintln!("dg: resolving external link hostnames…");
+    }
+    let resolver = validation::links::SystemResolver::default();
+    validation::links::check_external_links(root, pattern, &resolver)
+        .context("external link check failed")
 }

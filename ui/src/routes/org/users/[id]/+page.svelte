@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { orgData, orgLoading } from '$lib/stores/org';
 	import { assignmentsData, assignmentsLoading, loadAssignments, assignmentsForHandle } from '$lib/stores/assignments';
@@ -82,7 +83,7 @@
 	function docHref(a: { doc_id: string; doc_type: string }): string {
 		if (a.doc_type === 'service' || a.doc_type === 'app') return '#';
 		const folder = $docTypes[a.doc_type]?.folder ?? a.doc_type;
-		return `/${folder}/${a.doc_id.toLowerCase()}`;
+		return withBase(`/${folder}/${a.doc_id.toLowerCase()}`);
 	}
 
 	function roleLabel(role: string): string {
@@ -190,7 +191,7 @@
 					<Card.Content>
 						<div class="flex flex-wrap gap-2">
 							{#each user.teams as teamId}
-								<Badge variant="secondary" href="/org/teams/{teamId}">
+								<Badge variant="secondary" href={withBase(`/org/teams/${teamId}`)}>
 									{$orgData?.teams[teamId]?.name ?? teamId}
 								</Badge>
 							{/each}

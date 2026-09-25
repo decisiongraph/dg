@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { allServices, servicesLoading, loadServices, serviceBySlug } from '$lib/stores/services';
 	import { orgData } from '$lib/stores/org';
@@ -119,14 +120,14 @@
 							<span>Owner:</span>
 							{#if isTeamOwned}
 								<a
-									href="/org/teams/{service.owner_team}"
+									href={withBase(`/org/teams/${service.owner_team}`)}
 									class="inline-flex items-center gap-1 no-underline hover:text-foreground transition-colors font-medium text-foreground"
 								>
 									{team?.name ?? service.owner_team}
 								</a>
 							{:else}
 								<a
-									href="/org/users/{service.owner}"
+									href={withBase(`/org/users/${service.owner}`)}
 									class="inline-flex items-center gap-1 no-underline hover:text-foreground transition-colors"
 								>
 									<UserAvatar

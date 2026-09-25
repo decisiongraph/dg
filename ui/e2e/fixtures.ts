@@ -46,23 +46,51 @@ async function waitForServer(url: string, timeoutMs = 30_000): Promise<void> {
 	throw new Error(`dg serve at ${url} did not become ready: ${lastError}`);
 }
 
-export async function startDgServer(requestedPort: number): Promise<DgServer> {
+// Share .dg/cache (the ~8MB d2 browser bundle + avatar lookups) across
+// workers/runs so only the first site build ever hits the network for them.
+const sharedCache = path.join(os.tmpdir(), 'dg-e2e-shared-cache');
+
+/** Path to the prebuilt debug `dg` binary; throws with build hints if missing. */
+export function requireDgBinary(): string {
 	if (!fs.existsSync(dgBinary)) {
 		throw new Error(
 			`dg binary not found at ${dgBinary}. Run: cd ui && bun run build && cd .. && cargo build -p dg-cli`
 		);
 	}
+	return dgBinary;
+}
 
+/** Copy example/ into a fresh temp dir, seeded with the shared .dg/cache. */
+export function copyExampleProject(): string {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dg-e2e-'));
 	fs.cpSync(path.join(repoRoot, 'example'), dir, { recursive: true });
-
-	// Share .dg/cache (the ~8MB d2 browser bundle + avatar lookups) across
-	// workers/runs so only the first server ever hits the network for them.
-	const sharedCache = path.join(os.tmpdir(), 'dg-e2e-shared-cache');
-	const tempCache = path.join(dir, '.dg', 'cache');
 	if (fs.existsSync(sharedCache)) {
-		fs.cpSync(sharedCache, tempCache, { recursive: true });
+		fs.cpSync(sharedCache, path.join(dir, '.dg', 'cache'), { recursive: true });
 	}
+	return dir;
+}
+
+/**
+ * Populate the shared cache from whichever build fetched it first. Stage +
+ * rename so a concurrently-starting server never sees a half-written cache.
+ */
+export function saveSharedCache(dir: string): void {
+	const tempCache = path.join(dir, '.dg', 'cache');
+	if (fs.existsSync(sharedCache) || !fs.existsSync(tempCache)) return;
+	const staging = `${sharedCache}.${process.pid}.tmp`;
+	try {
+		fs.cpSync(tempCache, staging, { recursive: true });
+		fs.renameSync(staging, sharedCache);
+	} catch {
+		// another worker won the race — fine
+		fs.rmSync(staging, { recursive: true, force: true });
+	}
+}
+
+export async function startDgServer(requestedPort: number): Promise<DgServer> {
+	requireDgBinary();
+
+	const dir = copyExampleProject();
 
 	// dg auto-increments if the port is busy and prints the actual one
 	const child: ChildProcess = spawn(
@@ -95,20 +123,7 @@ export async function startDgServer(requestedPort: number): Promise<DgServer> {
 	});
 
 	await waitForServer(`${url}/data/docs.json`);
-
-	// Populate the shared cache from whichever server fetched it first.
-	// Stage + rename so a concurrently-starting server never sees a
-	// half-written cache directory.
-	if (!fs.existsSync(sharedCache) && fs.existsSync(tempCache)) {
-		try {
-			const staging = `${sharedCache}.${process.pid}.tmp`;
-			fs.cpSync(tempCache, staging, { recursive: true });
-			fs.renameSync(staging, sharedCache);
-		} catch {
-			// another worker won the race — fine
-			fs.rmSync(`${sharedCache}.${process.pid}.tmp`, { recursive: true, force: true });
-		}
-	}
+	saveSharedCache(dir);
 
 	return {
 		url,
