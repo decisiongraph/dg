@@ -38,9 +38,13 @@ const IGNORED_DIRS: &[&str] = &[
     ".ruff_cache",
 ];
 
-/// Returns true if any path component matches an ignored directory name.
-pub fn is_ignored_dir(path: &Path) -> bool {
-    path.components()
+/// Returns true if any component of `path` below `root` matches an ignored
+/// directory name. Components above `root` don't count, so a project checked
+/// out under e.g. `.claude/worktrees/` is still scanned.
+pub fn is_ignored_dir(root: &Path, path: &Path) -> bool {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
         .any(|c| IGNORED_DIRS.contains(&c.as_os_str().to_str().unwrap_or("")))
 }
 
@@ -88,7 +92,7 @@ pub fn discover_files(
             continue;
         }
 
-        if is_ignored_dir(path) {
+        if is_ignored_dir(dir, path) {
             continue;
         }
 
@@ -190,7 +194,7 @@ pub fn discover_singleton_files(
             continue;
         }
 
-        if is_ignored_dir(path) {
+        if is_ignored_dir(dir, path) {
             continue;
         }
 
@@ -218,5 +222,19 @@ mod tests {
         assert!(matches_glob(path, "*.md"));
         assert!(matches_glob(path, "adr-*.md"));
         assert!(!matches_glob(path, "*.txt"));
+    }
+
+    #[test]
+    fn ignored_dirs_only_count_below_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Project itself lives under an ignored dir name (e.g. a Claude worktree)
+        let root = tmp.path().join(".claude/worktrees/proj");
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::create_dir_all(root.join(".claude")).unwrap();
+        std::fs::write(root.join("docs/adr-001.md"), "# ADR").unwrap();
+        std::fs::write(root.join(".claude/skill.md"), "# skill").unwrap();
+
+        let files = discover_files(&root, None, &[], true).unwrap();
+        assert_eq!(files, vec![root.join("docs/adr-001.md")]);
     }
 }

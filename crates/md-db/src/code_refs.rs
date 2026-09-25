@@ -227,7 +227,7 @@ pub fn scan_code_refs(root: &Path, schema: &Schema, cache: &mut CodeRefCache) {
         if !path.is_file() {
             continue;
         }
-        if is_ignored_dir(path) {
+        if is_ignored_dir(root, path) {
             continue;
         }
 

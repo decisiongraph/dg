@@ -310,7 +310,7 @@ fn scan_file_updates(dir: &Path, id_mapping: &BTreeMap<String, String>) -> Resul
         }
         let path = entry.path();
 
-        if crate::discovery::is_ignored_dir(path) {
+        if crate::discovery::is_ignored_dir(dir, path) {
             continue;
         }
 
