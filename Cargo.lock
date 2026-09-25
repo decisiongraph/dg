@@ -1741,6 +1741,7 @@ dependencies = [
  "ignore",
  "kdl",
  "lazy_static",
+ "percent-encoding",
  "rayon",
  "regex",
  "rust-embed",

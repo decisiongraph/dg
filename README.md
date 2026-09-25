@@ -130,7 +130,15 @@ dg set OPP-001 --remove tags                      # Remove a field
 dg validate                          # Schema validation (errors + warnings)
 dg validate --skip C002              # Suppress specific diagnostic codes
 dg validate --no-install             # Don't auto-install deps / start devenv services before checks
+dg validate --check-links            # Also DNS-resolve external link hostnames (C024/C025, network)
 dg lint                              # Validate + graph health (orphans, cycles, dangling refs)
+dg lint --check-links                # Same opt-in DNS check for external links
+# Local links/images/attachments in doc bodies are resolved against the file:
+# missing targets are errors (C020); targets outside the top-level git repo
+# (superproject when docs live in a submodule; .dg root outside git) warn
+# (C021), attachments (images, csv, xlsx, pdf, ...) outside it suggest moving
+# into docs/assets/ (C023), and absolute filesystem paths warn with the
+# relative path (C022) — `dg fmt` rewrites those inside the repo automatically.
 # GitHub-hosted projects: warns when detected package ecosystems (cargo, npm, mix,
 # docker, terraform, opentofu, nix, ...) lack .github/dependabot.yml coverage
 # (SV011/SV012) — OpenTofu is told apart from Terraform via .tofu files,

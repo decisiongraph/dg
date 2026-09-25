@@ -17,6 +17,11 @@ pub struct LintArgs {
     /// before running tests/linters
     #[arg(long)]
     pub no_install: bool,
+
+    /// Also resolve hostnames of external http(s) links via DNS (network;
+    /// catches typo domains: C024/C025)
+    #[arg(long)]
+    pub check_links: bool,
 }
 
 pub fn run(
@@ -40,6 +45,14 @@ pub fn run(
     };
     let outcome = validation::validate_service_checks(root, &opts);
     result.file_results.extend(outcome.file_results);
+    if args.check_links {
+        result
+            .file_results
+            .extend(super::validate::check_external_links(
+                root,
+                args.pattern.as_deref(),
+            )?);
+    }
 
     if !result.is_ok() {
         has_errors = true;

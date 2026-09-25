@@ -1,6 +1,7 @@
 mod content;
 pub(crate) mod directory;
 pub mod document;
+pub mod links;
 mod types;
 
 pub use directory::{
@@ -1169,6 +1170,38 @@ type "readme" folder="." max_count=1 singleton=#true {
         let body = "Text with | pipes | in it but no table.\n";
         check_broken_tables(body, &mut diags);
         assert!(diags.is_empty(), "random pipes should not trigger C001");
+    }
+
+    // --- local link checks wired into validate_directory ---
+
+    #[test]
+    fn validate_directory_reports_broken_body_links() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".dg")).unwrap();
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::write(root.join("docs/notes.md"), "# Notes\n").unwrap();
+        std::fs::write(
+            root.join("docs/adr-001-test.md"),
+            "---\nstatus: accepted\nauthor: \"@onni\"\n---\n\n# Test\n\nSee [ok](notes.md), [bad](missing.md) and [ADR](ADR-001).\n\n## Decision\n\nX\n\n## Consequences\n\n### Positive\n\nY\n",
+        )
+        .unwrap();
+        let result = validate_directory(root, &test_schema(), None, None).unwrap();
+        let codes: Vec<_> = result
+            .file_results
+            .iter()
+            .flat_map(|fr| fr.diagnostics.iter().map(|d| d.code.as_str()))
+            .filter(|c| c.starts_with("C02"))
+            .collect();
+        assert_eq!(codes, vec!["C020"], "{:?}", result.file_results);
+    }
+
+    #[test]
+    fn image_in_code_block_ignored() {
+        let body = "```md\n![x](images/x.png)\n```\n";
+        let mut diags = Vec::new();
+        check_image_paths(body, &mut diags);
+        assert!(diags.is_empty());
     }
 
     // --- check_image_paths ---
