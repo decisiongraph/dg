@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import StatusBadge from './StatusBadge.svelte';
 	import DeviconIcon from './DeviconIcon.svelte';
 	import type { ServiceEntry } from '$lib/types';
@@ -21,7 +22,7 @@
 </script>
 
 <a
-	href="/services/{service.slug}"
+	href={withBase(`/services/${service.slug}`)}
 	class="block rounded-lg border border-l-4 {borderColor} bg-card p-3 shadow-sm transition-all hover:shadow-md no-underline text-inherit"
 >
 	<div class="flex items-center justify-between gap-2">

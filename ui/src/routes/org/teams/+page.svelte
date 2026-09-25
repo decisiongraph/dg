@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { orgData, orgLoading } from '$lib/stores/org';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import Building2Icon from '@lucide/svelte/icons/building-2';
@@ -21,7 +22,7 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#each teams as [id, team]}
-				<a href="/org/teams/{id}" class="rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md {isInactive(team.status) ? 'opacity-60' : ''}">
+				<a href={withBase(`/org/teams/${id}`)} class="rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md {isInactive(team.status) ? 'opacity-60' : ''}">
 					<div class="flex items-center gap-3">
 						<UsersIcon class="size-5 text-muted-foreground shrink-0" />
 						<div>

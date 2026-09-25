@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { rebaseHtml, withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { allServices, servicesLoading, loadServices, serviceBySlug } from '$lib/stores/services';
 	import { orgData } from '$lib/stores/org';
@@ -126,7 +127,7 @@
 						<div
 							class="text-sm text-muted-foreground mb-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_a]:text-primary"
 						>
-							{@html service.description_html}
+							{@html rebaseHtml(service.description_html)}
 						</div>
 					{:else if service.description}
 						<p class="text-sm text-muted-foreground mb-3">{service.description}</p>
@@ -137,14 +138,14 @@
 							<span>Owner:</span>
 							{#if isTeamOwned}
 								<a
-									href="/org/teams/{service.owner_team}"
+									href={withBase(`/org/teams/${service.owner_team}`)}
 									class="inline-flex items-center gap-1 no-underline hover:text-foreground transition-colors font-medium text-foreground"
 								>
 									{team?.name ?? service.owner_team}
 								</a>
 							{:else}
 								<a
-									href="/org/users/{service.owner}"
+									href={withBase(`/org/users/${service.owner}`)}
 									class="inline-flex items-center gap-1 no-underline hover:text-foreground transition-colors"
 								>
 									<UserAvatar

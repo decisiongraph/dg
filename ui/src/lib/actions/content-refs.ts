@@ -2,6 +2,7 @@ import { get } from 'svelte/store';
 import { allDocs, docTypes } from '$lib/stores/docs';
 import { orgData } from '$lib/stores/org';
 import { siteMeta } from '$lib/stores/site-meta';
+import { withBase } from '$lib/url';
 import type { DocEntry, TypeInfo } from '$lib/types';
 import {
 	buildMentionHtml,
@@ -67,7 +68,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 function buildDocHoverCard(doc: DocEntry, folder: string): string {
-	return `<a href="/${esc(folder)}/${esc(doc.id.toLowerCase())}" class="group/mention relative inline-flex items-center font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">
+	return `<a href="${esc(withBase(`/${folder}/${doc.id.toLowerCase()}`))}" class="group/mention relative inline-flex items-center font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">
 		${esc(doc.id)}
 		${buildHoverPopup(doc)}
 	</a>`;
@@ -324,7 +325,7 @@ export function enrichExistingDocLinks(node: HTMLElement) {
 		// Rewrite .html href to SPA route
 		const prefix = doc.type?.toLowerCase() ?? docId.split('-')[0]?.toLowerCase();
 		const folder = types[prefix]?.folder ?? prefix;
-		a.setAttribute('href', `/${folder}/${doc.id.toLowerCase()}`);
+		a.setAttribute('href', withBase(`/${folder}/${doc.id.toLowerCase()}`));
 
 		// Skip hover cards for gantt row labels (ID + title already visible)
 		if (a.closest('.row-label')) continue;

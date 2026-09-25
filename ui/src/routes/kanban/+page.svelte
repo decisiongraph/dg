@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import type { AssignmentsData, Assignment, DocsData, DocEntry } from '$lib/types';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { enrichContentRefs } from '$lib/actions/content-refs';
@@ -217,20 +218,20 @@
 			<p class="text-sm font-medium text-foreground mb-2 leading-snug line-clamp-3" use:enrichContentRefs>{task.description}</p>
 			{#if task.parent_opp_id}
 				<div class="flex items-center gap-1.5 mb-1.5 text-xs text-muted-foreground">
-					<a href="/opportunities/{task.parent_opp_id.toLowerCase()}"
+					<a href={withBase(`/opportunities/${task.parent_opp_id.toLowerCase()}`)}
 						class="text-primary hover:underline font-mono">{task.parent_opp_id}</a>
 					<span>{task.parent_opp_title}</span>
 				</div>
 			{/if}
 			<div class="flex items-center gap-2 flex-wrap">
 				<a
-					href="/{folder}/{task.doc_id.toLowerCase()}"
+					href={withBase(`/${folder}/${task.doc_id.toLowerCase()}`)}
 					class="text-primary hover:underline font-mono text-xs"
 				>{task.doc_id}</a>
 				<span class="text-xs text-muted-foreground">{task.doc_title}</span>
 			</div>
 			<div class="flex items-center justify-between mt-2">
-				<a href="/org/users/{task.owner}" class="text-primary hover:underline text-xs">@{task.owner}</a>
+				<a href={withBase(`/org/users/${task.owner}`)} class="text-primary hover:underline text-xs">@{task.owner}</a>
 				{#if task.due_date}
 					<span class="text-xs text-muted-foreground">{task.due_date}</span>
 				{/if}

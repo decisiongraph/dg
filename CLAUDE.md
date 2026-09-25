@@ -35,11 +35,13 @@ The site is a SvelteKit SPA (`ui/`, Svelte 5, adapter-static, `ssr = false`) emb
 - `ui/src/lib/stores/` — loads `/data/*.json`
 - Build: `cd ui && bun install && bun run build` → `ui/build/`. `crates/md-db/build.rs` runs this automatically at compile time (`DG_SKIP_UI_BUILD=1` to skip); `ui/build/` is embedded via rust-embed in `md-db/src/site/embed.rs`.
 - UI dev loop: `dg serve -p 10050` in a test project + `cd ui && bun run dev` (vite proxies `/data`).
+- **Subpath hosting:** site must work at `/` and under any prefix (e.g. `/demo/pied-piper/`). JSON + server-rendered HTML use root-relative app paths (`/org/users/x`); UI maps them via `ui/src/lib/url.ts` (`withBase()` for hrefs/`goto`/fetch, `rebaseHtml()` for `{@html}`, `stripBase()` for `page.url.pathname`). Never hard-code `href="/..."`. `base` is detected at runtime by the HTML shells (`md-db/src/site/shell.rs`). Covered by `ui/e2e/subpath.spec.ts`.
 
 **Data generation (`md-db/src/site/`):**
 - `mod.rs` — `generate_site()`: writes SPA files, discovers docs, builds graph, copies doc assets/avatars, fetches d2 bundle, writes per-route fallback `index.html`s. Returns file count.
 - `data.rs` — `generate_data_files()`: `docs.json`, `graph.json`, `org.json`, `services.json`, `nav.json`, `search-index.json`, `roadmap.json`, `site-meta.json`, `readme.json`, `assignments.json`, `code-refs.json`, `schema.json`
 - `embed.rs` — rust-embed of `ui/build/`
+- `shell.rs` — `localize_shell()`: rewrites SvelteKit `index.html` per route so it detects its base path at runtime
 - `SiteConfig` in `mod.rs`: `{ title, roadmap, users, roadmap_html, roadmap_generated_at, readme_html, logo_path, edit_url_prefix, is_local_dev }`
 
 **Entry points:**

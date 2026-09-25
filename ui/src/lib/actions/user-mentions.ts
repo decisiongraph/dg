@@ -1,5 +1,6 @@
 import { get } from 'svelte/store';
 import { orgData } from '$lib/stores/org';
+import { withBase } from '$lib/url';
 import type { OrgData, UserDef, TeamDef, OrgDef } from '$lib/types';
 
 export const AVATAR_COLORS = [
@@ -52,7 +53,7 @@ function teamHoverCardContent(handle: string, team: TeamDef, org: OrgData): stri
 export function buildTeamHtml(handle: string, team: TeamDef, org: OrgData): string {
 	const content = teamHoverCardContent(handle, team, org);
 	const hoverCard = `<span class="user-hovercard" style="display:none;">${content}</span>`;
-	return `<a href="/org/teams/${esc(handle)}" class="group/mention relative inline-flex items-center gap-0.5"><span class="text-xs">👥</span><span class="underline decoration-dotted">@team/${esc(handle)}</span>${hoverCard}</a>`;
+	return `<a href="${esc(withBase(`/org/teams/${handle}`))}" class="group/mention relative inline-flex items-center gap-0.5"><span class="text-xs">👥</span><span class="underline decoration-dotted">@team/${esc(handle)}</span>${hoverCard}</a>`;
 }
 
 /** Build HTML for an @entity/ mention with link + hover card. */
@@ -60,7 +61,7 @@ export function buildOrgHtml(handle: string, orgDef: OrgDef): string {
 	const displayName = esc(orgDef.name || handle);
 	const content = `<span class="font-medium text-sm">${displayName}</span>`;
 	const hoverCard = `<span class="user-hovercard" style="display:none;">${content}</span>`;
-	return `<a href="/org/${esc(handle)}" class="group/mention relative inline-flex items-center gap-0.5"><span class="text-xs">🏢</span><span class="underline decoration-dotted">@entity/${esc(handle)}</span>${hoverCard}</a>`;
+	return `<a href="${esc(withBase(`/org/${handle}`))}" class="group/mention relative inline-flex items-center gap-0.5"><span class="text-xs">🏢</span><span class="underline decoration-dotted">@entity/${esc(handle)}</span>${hoverCard}</a>`;
 }
 
 export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): string {
@@ -74,12 +75,12 @@ export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): s
 	// Badge (link wrapping the initials circle)
 	const departedFilter = isDeparted ? ' opacity-50 grayscale' : '';
 	const badge = user.avatar_url
-		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-6 h-6 shrink-0 align-middle${departedFilter}" />`
+		? `<img src="${esc(withBase(user.avatar_url))}" alt="${displayName}" class="rounded-full object-cover w-6 h-6 shrink-0 align-middle${departedFilter}" />`
 		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-6 h-6 text-[10px] ${bg} ${fg}${departedFilter}">${ini}</span>`;
 
 	// Hover card content
 	const avatarLarge = user.avatar_url
-		? `<img src="${esc(user.avatar_url)}" alt="${displayName}" class="rounded-full object-cover w-10 h-10 shrink-0${departedFilter}" />`
+		? `<img src="${esc(withBase(user.avatar_url))}" alt="${displayName}" class="rounded-full object-cover w-10 h-10 shrink-0${departedFilter}" />`
 		: `<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm ${bg} ${fg} shrink-0${departedFilter}">${ini}</span>`;
 
 	const titleLine = user.title ? `<span class="text-xs text-muted-foreground">${esc(user.title)}</span>` : '';
@@ -108,7 +109,7 @@ export function buildMentionHtml(handle: string, user: UserDef, org: OrgData): s
 
 	const hoverCard = `<span class="user-hovercard" style="display:none;">${hoverContent}</span>`;
 
-	return `<a href="/org/users/${esc(handle)}" class="group/mention relative inline-flex items-center h-6 overflow-hidden">${badge}${hoverCard}</a>`;
+	return `<a href="${esc(withBase(`/org/users/${handle}`))}" class="group/mention relative inline-flex items-center h-6 overflow-hidden">${badge}${hoverCard}</a>`;
 }
 
 /** Shared floating hover card element, created once and reused. */

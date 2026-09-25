@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { page } from '$app/state';
 	import { orgData, orgLoading } from '$lib/stores/org';
 	import { assignmentsData, assignmentsLoading, loadAssignments, assignmentsForHandles } from '$lib/stores/assignments';
@@ -81,7 +82,7 @@
 	function docHref(a: { doc_id: string; doc_type: string }): string {
 		if (a.doc_type === 'service' || a.doc_type === 'app') return '#';
 		const folder = $docTypes[a.doc_type]?.folder ?? a.doc_type;
-		return `/${folder}/${a.doc_id.toLowerCase()}`;
+		return withBase(`/${folder}/${a.doc_id.toLowerCase()}`);
 	}
 
 	function roleLabel(role: string): string {
@@ -124,13 +125,13 @@
 							{#if teamOrg}
 								<span class="inline-flex items-center gap-1.5">
 									<Building2Icon class="size-3.5 shrink-0" />
-									<a href="/org/{team.org}" class="text-primary hover:underline">{teamOrg.name}</a>
+									<a href={withBase(`/org/${team.org}`)} class="text-primary hover:underline">{teamOrg.name}</a>
 								</span>
 							{/if}
 							{#if parentTeam}
 								<span class="inline-flex items-center gap-1.5">
 									<NetworkIcon class="size-3.5 shrink-0" />
-									<a href="/org/teams/{team.parent}" class="text-primary hover:underline">{parentTeam.name}</a>
+									<a href={withBase(`/org/teams/${team.parent}`)} class="text-primary hover:underline">{parentTeam.name}</a>
 								</span>
 							{/if}
 						</div>
@@ -140,7 +141,7 @@
 					{@const leadUser = $orgData?.users[team.lead]}
 					<div class="flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1.5 text-sm">
 						<span class="text-muted-foreground">Lead:</span>
-						<a href="/org/users/{team.lead}" class="inline-flex items-center gap-1.5 text-primary hover:underline no-underline">
+						<a href={withBase(`/org/users/${team.lead}`)} class="inline-flex items-center gap-1.5 text-primary hover:underline no-underline">
 							<UserAvatar handle={team.lead} name={leadUser?.name ?? team.lead} avatarUrl={leadUser?.avatar_url} size="sm" />
 							<span>{leadUser?.name ?? `@${team.lead}`}</span>
 						</a>
@@ -192,7 +193,7 @@
 				<h2 class="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">Sub-teams</h2>
 				<div class="grid gap-3 sm:grid-cols-2">
 					{#each childTeams as { id, team: child } (id)}
-						<a href="/org/teams/{id}" class="block rounded-lg border bg-card p-4 hover:bg-muted/50 transition-colors">
+						<a href={withBase(`/org/teams/${id}`)} class="block rounded-lg border bg-card p-4 hover:bg-muted/50 transition-colors">
 							<div class="flex items-center gap-2">
 								<UsersIcon class="size-4 text-muted-foreground shrink-0" />
 								<span class="font-medium text-foreground">{child?.name ?? id}</span>
@@ -233,7 +234,7 @@
 								{@const user = $orgData?.users[handle]}
 								<Table.Row>
 									<Table.Cell class="px-4">
-										<a href="/org/users/{handle}" class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
+										<a href={withBase(`/org/users/${handle}`)} class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
 											<UserAvatar {handle} name={user?.name ?? handle} avatarUrl={user?.avatar_url} size="sm" />
 											@{handle}
 										</a>
@@ -285,7 +286,7 @@
 								{@const user = $orgData?.users[handle]}
 								<Table.Row>
 									<Table.Cell class="px-4">
-										<a href="/org/users/{handle}" class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
+										<a href={withBase(`/org/users/${handle}`)} class="inline-flex items-center gap-2 text-primary hover:underline font-medium">
 											<UserAvatar {handle} name={user?.name ?? handle} avatarUrl={user?.avatar_url} size="sm" />
 											@{handle}
 										</a>

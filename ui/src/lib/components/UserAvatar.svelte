@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withBase } from '$lib/url';
 	import { orgData } from '$lib/stores/org';
 	import { AVATAR_COLORS, colorIndex, initials as getInitials, showCard, hideCard } from '$lib/actions/user-mentions';
 
@@ -25,7 +26,7 @@
 	const isExternal = $derived(user?.kind === 'external');
 	const isDeparted = $derived(user?.status === 'departed');
 	const departedClass = $derived(isDeparted ? 'opacity-50 grayscale' : '');
-	const userHref = $derived(`/org/users/${handle}`);
+	const userHref = $derived(withBase(`/org/users/${handle}`));
 
 	let triggerEl: HTMLElement | undefined = $state();
 
@@ -45,7 +46,7 @@
 >
 	{#if avatarUrl}
 		<img
-			src={avatarUrl}
+			src={withBase(avatarUrl)}
 			alt={name}
 			class="rounded-full object-cover {sizeClass} {departedClass}"
 		/>
@@ -60,7 +61,7 @@
 	<span class="user-hovercard" style="display:none;">
 		<span class="flex items-center gap-2">
 			{#if avatarUrl}
-				<img src={avatarUrl} alt={name} class="rounded-full object-cover w-10 h-10 shrink-0 {departedClass}" />
+				<img src={withBase(avatarUrl)} alt={name} class="rounded-full object-cover w-10 h-10 shrink-0 {departedClass}" />
 			{:else}
 				<span class="inline-flex items-center justify-center rounded-full font-medium w-10 h-10 text-sm {colorClass} shrink-0 {departedClass}">{ini}</span>
 			{/if}

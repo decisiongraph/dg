@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { stripBase, withBase } from '$lib/url';
 	import BoxesIcon from "@lucide/svelte/icons/boxes";
 	import LightbulbIcon from "@lucide/svelte/icons/lightbulb";
 	import ShieldIcon from "@lucide/svelte/icons/shield";
@@ -32,7 +33,7 @@
 	function isActive(href: string | undefined): boolean {
 		if (!href) return false;
 		const norm = "/" + href.replace(/^\//, "").replace(/\/$/, "");
-		const current = page.url.pathname.replace(/\/$/, "") || "/";
+		const current = stripBase(page.url.pathname).replace(/\/$/, "") || "/";
 		return current === norm || current.startsWith(norm + "/");
 	}
 </script>
@@ -52,7 +53,7 @@
 				<Sidebar.MenuItem>
 					<Sidebar.MenuButton tooltipContent={parsed.name} isActive={isActive(item.href)}>
 						{#snippet child({ props })}
-							<a href="/{item.href}" {...props}>
+							<a href={withBase(`/${item.href}`)} {...props}>
 								<Icon class="size-4" />
 								<span>{parsed.name}</span>
 							</a>

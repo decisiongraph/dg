@@ -10,6 +10,7 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { goto } from '$app/navigation';
+	import { withBase } from '$lib/url';
 	import { graphNodes, graphEdges, loadGraph } from '$lib/stores/graph';
 	import { docTypes } from '$lib/stores/docs';
 	import { setContext } from 'svelte';
@@ -121,7 +122,7 @@
 		if (node.id === focusId.toUpperCase()) return;
 		const docType = node.data.docType as string;
 		const folder = $docTypes[docType]?.folder ?? docType;
-		goto(`/${folder}/${node.id.toLowerCase()}`);
+		goto(withBase(`/${folder}/${node.id.toLowerCase()}`));
 	}
 </script>
 
