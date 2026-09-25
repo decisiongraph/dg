@@ -56,8 +56,8 @@
         # Do NOT use `src = self` here. Two reasons:
         #
         # 1. Cachix hits require CI and users to compute the *same* store
-        #    path. `self` is the whole repo, and the repo contains gitlinks
-        #    (submodule entries without a .gitmodules) under
+        #    path. `self` is the whole repo, and the repo used to contain
+        #    gitlinks (submodule entries without a .gitmodules) under
         #    example/services/{api,auth-service,data-platform}. Nix on the
         #    GitHub Actions runners drops those as absent, while Nix on
         #    macOS/other Linux keeps them as empty directories. File contents
