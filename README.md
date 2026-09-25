@@ -482,6 +482,10 @@ CLAUDE.md          # AI agent instructions (auto-generated)
 | `crates/markdown-tui` | Terminal markdown renderer (GFM → ANSI / ratatui widgets) |
 | `cc-eval/` | Claude Code evaluation runner (standalone, not in workspace) |
 
+## Website
+
+[decisiongraph.dev](https://decisiongraph.dev) lives in `website/`: a SvelteKit landing page plus live demos built with `dg export --site` from the sample projects in `website/demos/`. Cloudflare Pages builds it from `main`; see [`website/README.md`](website/README.md).
+
 ## License
 
 AGPL-3.0-or-later

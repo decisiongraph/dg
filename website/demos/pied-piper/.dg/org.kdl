@@ -1,0 +1,125 @@
+// Pied Piper Decision Archive — people and teams
+// Converted from the original dg.toml sample. No emails on purpose: dg
+// looks up GitHub avatars by email, which would pick up unrelated accounts.
+
+// Original Pied Piper founders
+team "founders" {
+    name "Founders"
+}
+
+// C-suite leadership
+team "executive" {
+    name "Executive Team"
+    lead "richard"
+}
+
+// Core engineering team
+team "engineering" {
+    name "Engineering"
+    lead "gilfoyle"
+}
+
+// Business operations and HR
+team "operations" {
+    name "Operations"
+    lead "jared"
+}
+
+// Pied Piper board members
+team "board" {
+    name "Board of Directors"
+}
+
+// VC partners and angel investors
+team "investors" {
+    name "Investors"
+}
+
+// Legal counsel
+team "legal" {
+    name "Legal"
+    lead "ron"
+}
+
+// External competitors (for reference)
+team "competitors" {
+    name "Competitors"
+}
+
+user "richard" {
+    name "Richard Hendricks"
+    title "CEO, Founder, Architect"
+    teams "founders" "executive" "engineering"
+}
+
+// 2017-06-25: Departed to Tibet, presumed deceased
+user "erlich" {
+    name "Erlich Bachman"
+    title "Founder, Board Member"
+    teams "founders" "board"
+    status "departed"
+}
+
+user "gilfoyle" {
+    name "Bertram Gilfoyle"
+    title "Systems Architect, DevOps"
+    teams "engineering"
+}
+
+user "dinesh" {
+    name "Dinesh Chugtai"
+    title "Engineer, CTO"
+    teams "engineering"
+}
+
+user "jared" {
+    name "Jared Dunn"
+    title "COO, Head of Business"
+    teams "executive" "operations"
+}
+
+user "monica" {
+    name "Monica Hall"
+    title "Board Member, Partner"
+    teams "board" "investors"
+}
+
+// 2014-06-01: Deceased
+user "peter" {
+    name "Peter Gregory"
+    title "Investor"
+    teams "investors"
+    status "departed"
+}
+
+user "laurie" {
+    name "Laurie Bream"
+    title "Board Member, Managing Partner"
+    teams "board" "investors"
+}
+
+user "russ" {
+    name "Russ Hanneman"
+    title "Investor, Board Member"
+    teams "investors" "board"
+}
+
+// 2016-06-12: Removed as CEO
+user "jack" {
+    name "Jack Barker"
+    title "CEO"
+    teams "executive"
+    status "departed"
+}
+
+user "ron" {
+    name "Ron LaFlamme"
+    title "Attorney"
+    teams "legal"
+}
+
+user "gavin" {
+    name "Gavin Belson"
+    title "CEO"
+    teams "competitors"
+}

@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+
+/* Dark-only palette, ported from the original hand-written site */
+@theme {
+	--color-bg: #0a0a0a;
+	--color-bg-2: #111111;
+	--color-bg-3: #1a1a1a;
+	--color-surface: #1f1f1f;
+	--color-line: #2a2a2a;
+	--color-fg: #e5e5e5;
+	--color-fg-2: #a3a3a3;
+	--color-fg-3: #8a8a8a;
+	--color-primary: #3b82f6;
+	--color-primary-strong: #2563eb;
+	--color-primary-hover: #1d4ed8;
+	--color-accent: #10b981;
+	--color-code: #0d1117;
+	--font-sans:
+		-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+	--font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', ui-monospace, Consolas, monospace;
+}
+
+@layer base {
+	html {
+		scroll-behavior: smooth;
+		scroll-padding-top: 1rem;
+	}
+	body {
+		@apply bg-bg font-sans leading-relaxed text-fg antialiased;
+	}
+	a {
+		@apply text-primary;
+	}
+	:not(pre) > code {
+		@apply rounded bg-code px-1.5 py-0.5 font-mono text-[0.9em];
+	}
+	pre {
+		@apply overflow-x-auto rounded-lg border border-line bg-code p-4 font-mono text-sm leading-7;
+	}
+	h2 {
+		@apply mb-4 text-center text-3xl font-bold;
+	}
+}
+
+@layer components {
+	.btn {
+		@apply inline-flex items-center gap-2 rounded-lg px-6 py-3 text-[0.95rem] font-medium no-underline transition-colors;
+	}
+	.btn-primary {
+		@apply bg-primary-strong text-white hover:bg-primary-hover;
+	}
+	.btn-secondary {
+		@apply border border-line bg-surface text-fg hover:border-fg-3 hover:bg-bg-3;
+	}
+	.btn-outline {
+		@apply border border-line px-4 py-2 text-fg hover:bg-surface;
+	}
+	.card {
+		@apply rounded-xl border border-line bg-surface;
+	}
+	.pill {
+		@apply rounded-full bg-bg-3 px-3 py-1 text-xs text-fg-2;
+	}
+	.prompt {
+		@apply text-accent select-none;
+	}
+	.out {
+		@apply text-fg-2;
+	}
+	.comment {
+		@apply text-fg-3;
+	}
+}

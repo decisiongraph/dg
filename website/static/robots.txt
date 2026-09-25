@@ -1,0 +1,5 @@
+# https://decisiongraph.dev/robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://decisiongraph.dev/sitemap.xml
