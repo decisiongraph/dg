@@ -216,6 +216,10 @@ pub struct RefFormat {
     pub pattern: String,
 }
 
+/// Frontmatter keys dg reads itself, valid on every type: `type` picks the
+/// type and `allow_diagram_cycles` suppresses D002.
+pub const BUILTIN_FRONTMATTER_KEYS: &[&str] = &["type", "allow_diagram_cycles"];
+
 impl Schema {
     /// Parse a KDL schema from a file.
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
@@ -295,6 +299,15 @@ impl Schema {
             }
         }
         names
+    }
+
+    /// True if `key` is a field of `type_def`, a relation (either direction)
+    /// or a builtin key. Shared by validation (F020) and `dg fmt`, which
+    /// strips everything else.
+    pub fn defines_key(&self, type_def: &TypeDef, key: &str) -> bool {
+        type_def.fields.iter().any(|f| f.name == key)
+            || self.find_relation(key).is_some()
+            || BUILTIN_FRONTMATTER_KEYS.contains(&key)
     }
 
     /// Find a relation definition by field name (checks both name and inverse).

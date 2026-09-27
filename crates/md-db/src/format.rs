@@ -138,7 +138,17 @@ pub fn format_file(path: &Path, schema: &Schema, dry_run: bool) -> Result<Vec<Fo
         }
     }
 
-    // Remove frontmatter keys not defined in schema (type fields + relations)
+    // A `title` key from before titles moved to the H1: keep it as the heading
+    // instead of letting the strip below delete it
+    if move_title_to_h1(&mut doc, type_def, schema) {
+        changes.push(FormatChange {
+            path: path.to_path_buf(),
+            description: "moved frontmatter title to H1 heading".into(),
+        });
+        doc.rebuild_raw();
+    }
+
+    // Remove frontmatter keys not defined in schema (fields, relations, builtins)
     if let Some(ref mut fm) = doc.frontmatter {
         if strip_undefined_keys(fm, type_def, schema) {
             changes.push(FormatChange {
@@ -273,7 +283,31 @@ fn strip_empty_arrays(fm: &mut crate::frontmatter::Frontmatter) -> bool {
     changed
 }
 
-/// Remove frontmatter keys not defined in schema type fields or relations.
+/// Prepend `# <title>` from an undefined frontmatter `title` when the body has
+/// no H1. The key itself is left for `strip_undefined_keys`.
+fn move_title_to_h1(doc: &mut Document, type_def: &TypeDef, schema: &Schema) -> bool {
+    if schema.defines_key(type_def, "title") {
+        return false;
+    }
+    let Some(title) = doc
+        .frontmatter
+        .as_ref()
+        .and_then(|fm| fm.get_display("title"))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+    else {
+        return false;
+    };
+    let arena = Arena::new();
+    let root = ast_util::parse_md(&arena, &doc.body);
+    if !ast_util::find_headings(root, Some(1)).is_empty() {
+        return false;
+    }
+    doc.body = format!("\n# {title}\n\n{}", doc.body.trim_start_matches('\n'));
+    true
+}
+
+/// Remove frontmatter keys the schema doesn't define (see `Schema::defines_key`).
 fn strip_undefined_keys(
     fm: &mut crate::frontmatter::Frontmatter,
     type_def: &TypeDef,
@@ -281,17 +315,7 @@ fn strip_undefined_keys(
 ) -> bool {
     let undefined: Vec<String> = fm
         .keys()
-        .filter(|key| {
-            // Check type-specific fields
-            if type_def.fields.iter().any(|f| f.name == **key) {
-                return false;
-            }
-            // Check relation fields
-            if schema.find_relation(key).is_some() {
-                return false;
-            }
-            true
-        })
+        .filter(|key| !schema.defines_key(type_def, key))
         .cloned()
         .collect();
     let changed = !undefined.is_empty();
@@ -518,6 +542,54 @@ type "test" {
 "#,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn undefined_title_moves_to_h1() {
+        let schema = Schema::from_str(
+            r#"
+type "test" {
+    field "status" type="string"
+}
+"#,
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let no_h1 = dir.path().join("a.md");
+        let has_h1 = dir.path().join("b.md");
+        std::fs::write(
+            &no_h1,
+            "---\ntitle: Use Postgres\ntype: test\n---\n\n\n## Context\n\nx\n",
+        )
+        .unwrap();
+        std::fs::write(&has_h1, "---\ntitle: Old\ntype: test\n---\n\n# Real\n\nx\n").unwrap();
+
+        format_file(&no_h1, &schema, false).unwrap();
+        format_file(&has_h1, &schema, false).unwrap();
+
+        let a = std::fs::read_to_string(&no_h1).unwrap();
+        assert!(a.contains("---\n\n# Use Postgres\n\n## Context"), "{a}");
+        assert!(!a.contains("title:"), "{a}");
+        let b = std::fs::read_to_string(&has_h1).unwrap();
+        assert!(b.contains("# Real") && !b.contains("Old"), "{b}");
+    }
+
+    #[test]
+    fn strip_undefined_keys_keeps_builtins() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.md");
+        std::fs::write(
+            &path,
+            "---\ntitle: T\ntype: test\nallow_diagram_cycles: true\nbogus: x\n---\n\n# T\n",
+        )
+        .unwrap();
+
+        format_file(&path, &test_schema(), false).unwrap();
+
+        let out = std::fs::read_to_string(&path).unwrap();
+        assert!(out.contains("allow_diagram_cycles: true"), "{out}");
+        assert!(out.contains("type: test"), "{out}");
+        assert!(!out.contains("bogus"), "{out}");
     }
 
     #[test]
