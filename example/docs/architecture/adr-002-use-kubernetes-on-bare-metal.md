@@ -1,13 +1,19 @@
 ---
-title: Use Kubernetes on Bare-Metal for Container Orchestration
 status: accepted
 author: dave
 date: 2025-07-10
-tags: [infrastructure, kubernetes, self-hosted]
-enables: [OPP-002]
-related: [ADR-001]
+
+tags:
+  - infrastructure
+  - kubernetes
+  - self-hosted
+enables:
+  - OPP-002
+related:
+  - ADR-001
 ---
 
+# Use Kubernetes on Bare-Metal for Container Orchestration
 
 ## Context
 

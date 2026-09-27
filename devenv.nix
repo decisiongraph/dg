@@ -1,6 +1,15 @@
 { pkgs, lib, ... }:
 
 let
+  # Run dg built from the working tree against example/ (a stale
+  # target/release/dg could give a false pass or fail). Git hooks run outside
+  # the devenv shell, so put the devenv profile's cargo/rustc on PATH.
+  dgExample = pkgs.writeShellScript "dg-example" ''
+    ROOT="$(git rev-parse --show-toplevel)"
+    export PATH="$ROOT/.devenv/profile/bin:$PATH"
+    exec cargo run -q --manifest-path "$ROOT/Cargo.toml" -p dg-cli -- --root "$ROOT/example" "$@"
+  '';
+
   # The stop hook script as a Nix derivation. Its store path changes whenever
   # the content changes, which would break .claude/settings.json if referenced
   # directly. Instead we write a stable symlink in enterShell (see below).
@@ -161,32 +170,18 @@ in
     dg-fmt = {
       enable = true;
       name = "dg fmt";
-      entry = "${pkgs.writeShellScript "dg-fmt" ''
-        if [ -x ./target/release/dg ]; then
-          ./target/release/dg fmt --check
-        elif command -v dg &> /dev/null; then
-          dg fmt --check
-        fi
-      ''}";
-      files = "\\decisions/.*\\.md$";
-      # website/demos/* are separate dg projects (own .dg/), validated by CI
-      excludes = [ "^website/" ];
+      entry = "${dgExample} fmt --check";
+      # example/ is the repo's own dg project. website/demos/* have their own
+      # .dg/ and are validated by the website CI job.
+      files = "^example/.*\\.md$";
       pass_filenames = false;
     };
 
     dg-lint = {
       enable = true;
       name = "dg lint";
-      entry = "${pkgs.writeShellScript "dg-lint" ''
-        if [ -x ./target/release/dg ]; then
-          ./target/release/dg lint
-        elif command -v dg &> /dev/null; then
-          dg lint
-        fi
-      ''}";
-      files = "\\decisions/.*\\.md$";
-      # website/demos/* are separate dg projects (own .dg/), validated by CI
-      excludes = [ "^website/" ];
+      entry = "${dgExample} lint";
+      files = "^example/.*\\.md$";
       pass_filenames = false;
     };
 

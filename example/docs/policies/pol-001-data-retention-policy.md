@@ -1,14 +1,19 @@
 ---
-title: Data Retention Policy
 status: active
 author: onni
 owner: bob
 date: 2025-02-01
 review_date: 2025-08-01
-tags: [compliance, data, security]
-triggered_by: [ADR-001]
+
+tags:
+  - compliance
+  - data
+  - security
+triggered_by:
+  - ADR-001
 ---
 
+# Data Retention Policy
 
 ## Purpose
 

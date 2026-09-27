@@ -1944,16 +1944,19 @@ fn build_code_refs_json(project_dir: &Path, schema: &Schema) -> CodeRefsJson {
     let (commit_url_prefix, file_url_prefix) =
         match crate::code_refs::detect_repo_web_url(project_dir) {
             Some((base_url, branch)) => {
+                // Code ref paths are relative to the project, which may be a
+                // subfolder of the repo
+                let subdir = crate::code_refs::repo_subdir(project_dir);
                 let is_gitlab = base_url.contains("gitlab");
                 if is_gitlab {
                     (
                         Some(format!("{base_url}/-/commit/")),
-                        Some(format!("{base_url}/-/blob/{branch}/")),
+                        Some(format!("{base_url}/-/blob/{branch}/{subdir}")),
                     )
                 } else {
                     (
                         Some(format!("{base_url}/commit/")),
-                        Some(format!("{base_url}/blob/{branch}/")),
+                        Some(format!("{base_url}/blob/{branch}/{subdir}")),
                     )
                 }
             }

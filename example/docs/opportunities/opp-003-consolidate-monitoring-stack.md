@@ -1,15 +1,20 @@
 ---
-title: Consolidate Monitoring Stack
 status: completed
 author: eve
 owner: eve
+date: 2025-04-01
+
 priority: medium
 effort: small
 impact: medium
-date: 2025-04-01
-tags: [infrastructure, monitoring, observability]
+
+tags:
+  - infrastructure
+  - monitoring
+  - observability
 ---
 
+# Consolidate Monitoring Stack
 
 ## Description
 

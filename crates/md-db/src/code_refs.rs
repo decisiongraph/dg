@@ -575,6 +575,35 @@ pub fn detect_repo_web_url(_root: &Path) -> Option<(String, String)> {
     None
 }
 
+/// Path of `root` inside its git work tree, `/`-separated with a trailing
+/// slash (`"docs/"`), or `""` at the repo root / outside git. Paths dg stores
+/// are relative to the project root, so web URLs (edit, blob) need this in
+/// between the branch and the file path.
+#[cfg(feature = "git")]
+pub fn repo_subdir(root: &Path) -> String {
+    let rel = git2::Repository::discover(root).ok().and_then(|repo| {
+        let workdir = repo.workdir()?.canonicalize().ok()?;
+        let root = root.canonicalize().ok()?;
+        Some(root.strip_prefix(workdir).ok()?.to_path_buf())
+    });
+    let parts: Vec<String> = rel
+        .iter()
+        .flat_map(|p| p.components())
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("{}/", parts.join("/"))
+    }
+}
+
+/// No-op stub when git feature is disabled.
+#[cfg(not(feature = "git"))]
+pub fn repo_subdir(_root: &Path) -> String {
+    String::new()
+}
+
 /// Convert a git remote URL (SSH or HTTPS) to a web-browsable URL.
 #[cfg(feature = "git")]
 fn git_remote_to_web_url(url: &str) -> Option<String> {
@@ -880,5 +909,24 @@ type "pol" {
         let url = "https://github.com/user/project";
         let result = git_remote_to_web_url(url);
         assert_eq!(result, Some("https://github.com/user/project".to_string()));
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn repo_subdir_is_project_path_inside_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+        let project = tmp.path().join("website/demos/pied-piper");
+        std::fs::create_dir_all(&project).unwrap();
+
+        assert_eq!(repo_subdir(tmp.path()), "");
+        assert_eq!(repo_subdir(&project), "website/demos/pied-piper/");
+    }
+
+    #[cfg(feature = "git")]
+    #[test]
+    fn repo_subdir_empty_outside_git() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert_eq!(repo_subdir(tmp.path()), "");
     }
 }

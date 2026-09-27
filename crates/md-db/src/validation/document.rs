@@ -476,11 +476,6 @@ fn check_undefined_keys(
     schema: &Schema,
     diags: &mut Vec<Diagnostic>,
 ) {
-    // `type` is read by the type resolver itself (see validate_document) and
-    // `allow_diagram_cycles` suppresses D002, so neither may be flagged as
-    // unknown. Everything else is schema-defined.
-    const BUILTINS: &[&str] = &["type", "allow_diagram_cycles"];
-
     // Keys from removed dg features. Checked only after the schema lookups so
     // a project that defines its own field with the same name is unaffected.
     const DEPRECATED_KEYS: &[(&str, &str)] = &[(
@@ -490,16 +485,7 @@ fn check_undefined_keys(
     )];
 
     for key in fm.keys() {
-        // Check type-specific fields
-        if type_def.fields.iter().any(|f| f.name == *key) {
-            continue;
-        }
-        // Check relation fields (direct + inverse)
-        if schema.find_relation(key).is_some() {
-            continue;
-        }
-        // Check builtins
-        if BUILTINS.contains(&key.as_str()) {
+        if schema.defines_key(type_def, key) {
             continue;
         }
         if let Some((_, hint)) = DEPRECATED_KEYS.iter().find(|(k, _)| k == key) {

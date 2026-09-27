@@ -1,16 +1,22 @@
 ---
-title: Migrate from AWS to Self-Hosted Infrastructure
 status: pursuing
 author: dave
 owner: dave
+date: 2025-06-01
+
 priority: high
 effort: large
 impact: high
-date: 2025-06-01
-tags: [infrastructure, cost-reduction, self-hosted]
-enabled_by: [ADR-002]
+
+tags:
+  - infrastructure
+  - cost-reduction
+  - self-hosted
+enabled_by:
+  - ADR-002
 ---
 
+# Migrate from AWS to Self-Hosted Infrastructure
 
 ## Description
 

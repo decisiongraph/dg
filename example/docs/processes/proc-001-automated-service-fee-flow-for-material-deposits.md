@@ -1,9 +1,10 @@
 ---
-author: ""
-date: 2026-03-25
-owner: ""
-review_date: 2026-09-25
 status: active
+author: onni
+owner: onni
+date: 2026-03-25
+review_date: 2026-09-25
+
 tags:
   - billing
   - warehouse
@@ -67,15 +68,15 @@ flowchart TD
 1. **Customer Arrival** — Customer brings a shipment to the office for deposit
 2. **Initial Handling** — Shipment is weighed at the desk, paper form is filled out by both customer and employee, shipment is placed in storage
 3. **CRM Data Entry** — Navigate to `Customers → Deliveries → New Delivery` and fill in:
-   - Customer type (Organisation/Identity)
-   - Customer name
-   - Location (default: auto-detected, editable)
-   - Delivery date (auto-filled)
-   - Courier service used (checkbox)
-   - Shipment type: "Standard", "Fragile", or "Hazardous"
-   - Origin declaration
-   - Container seal numbers, gross weights and package weights
-   - Deliverer name
+   1. Customer type (Organisation/Identity)
+   2. Customer name
+   3. Location (default: auto-detected, editable)
+   4. Delivery date (auto-filled)
+   5. Courier service used (checkbox)
+   6. Shipment type: "Standard", "Fragile", or "Hazardous"
+   7. Origin declaration
+   8. Container seal numbers, gross weights and package weights
+   9. Deliverer name
 4. **Shipment Inspection** — Use `Inspection: START` button in delivery view, add at least one container with inspection results. Waste weight is recorded per delivery (editable via `Edit Delivery` when status is `In inspection`)
 5. **Service Fee Adjustments** — Before confirming inspection, optionally edit `waste weight`, `service fee override`, and `return of materials` fields (available when delivery is `In inspection`)
 6. **Trigger Service Fee** — Use `Create service fee` button in delivery show view. Button is visible when delivery is `In Inspection` or `Confirmed`, and only for new-flow deliveries with containers
@@ -123,4 +124,4 @@ flowchart TD
 
 | Date | Author | Changes |
 |---|---|---|
-| 2026-03-25 | | Initial version |
+| 2026-03-25 | @onni | Initial version |

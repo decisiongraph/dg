@@ -1,13 +1,18 @@
 ---
-title: Use PostgreSQL as Primary Database
 status: accepted
 author: onni
 date: 2025-01-15
-tags: [database, infrastructure]
-enables: [OPP-001]
-triggers: [POL-001]
+
+tags:
+  - database
+  - infrastructure
+enables:
+  - OPP-001
+triggers:
+  - POL-001
 ---
 
+# Use PostgreSQL as Primary Database
 
 ## Context
 

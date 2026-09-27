@@ -1,14 +1,24 @@
 ---
-title: Database Connection Pool Exhaustion
 status: resolved
-severity: sev2
 commander: onni
-responders: [alice, bob]
 date: 2025-03-15
+
+severity: sev2
 duration: 2h 15m
-tags: [database, outage, postgresql]
-triggers: [ADR-001, POL-001]
+
+responders:
+  - alice
+  - bob
+tags:
+  - database
+  - outage
+  - postgresql
+triggers:
+  - ADR-001
+  - POL-001
 ---
+
+# Database Connection Pool Exhaustion
 
 ## Summary
 

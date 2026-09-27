@@ -1,16 +1,22 @@
 ---
-title: Real-time Collaboration
 status: validating
 author: alice
 owner: alice
+date: 2025-03-01
+
 priority: high
 effort: large
 impact: high
-date: 2025-03-01
-tags: [product, real-time, collaboration]
-enabled_by: [ADR-001]
+
+tags:
+  - product
+  - real-time
+  - collaboration
+enabled_by:
+  - ADR-001
 ---
 
+# Real-time Collaboration
 
 ## Description
 
