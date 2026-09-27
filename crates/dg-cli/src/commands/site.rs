@@ -254,14 +254,17 @@ pub(crate) fn detect_logo(root: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Detect GitHub/GitLab edit URL prefix from git remote.
+/// Detect GitHub/GitLab edit URL prefix from git remote. Doc paths are
+/// relative to `root`, so a project in a repo subfolder gets that folder
+/// appended.
 pub(crate) fn detect_edit_url_prefix(root: &Path) -> Option<String> {
     let (base_url, branch) = md_db::code_refs::detect_repo_web_url(root)?;
+    let subdir = md_db::code_refs::repo_subdir(root);
     let is_gitlab = base_url.contains("gitlab");
     if is_gitlab {
-        Some(format!("{base_url}/-/edit/{branch}/"))
+        Some(format!("{base_url}/-/edit/{branch}/{subdir}"))
     } else {
-        Some(format!("{base_url}/edit/{branch}/"))
+        Some(format!("{base_url}/edit/{branch}/{subdir}"))
     }
 }
 
