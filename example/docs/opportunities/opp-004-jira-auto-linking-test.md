@@ -1,10 +1,14 @@
 ---
-title: JIRA Auto-linking Test
 status: identified
 author: alice
 date: 2025-03-15
-tags: [test, jira]
+
+tags:
+  - test
+  - jira
 ---
+
+# JIRA Auto-linking Test
 
 ## Description
 

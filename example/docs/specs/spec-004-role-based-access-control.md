@@ -1,14 +1,21 @@
 ---
 status: proposed
-priority: must
 author: alice
 date: 2025-06-10
-tags: [security, access-control, permissions]
-depends_on: [ADR-001]
-implements: [OPP-001]
-title: Role-based Access Control for Documents
+
+priority: must
+
+tags:
+  - security
+  - access-control
+  - permissions
+depends_on:
+  - ADR-001
+implements:
+  - OPP-001
 ---
 
+# Role-based Access Control for Documents
 
 ## Story
 

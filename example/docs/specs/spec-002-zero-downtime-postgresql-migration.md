@@ -1,14 +1,21 @@
 ---
-status: review
-priority: must
+status: proposed
 author: eve
 date: 2025-07-01
-tags: [infrastructure, database, migration]
-depends_on: [ADR-002]
-implements: [OPP-002]
-title: Zero-downtime PostgreSQL Migration to Bare Metal
+
+priority: must
+
+tags:
+  - infrastructure
+  - database
+  - migration
+depends_on:
+  - ADR-002
+implements:
+  - OPP-002
 ---
 
+# Zero-downtime PostgreSQL Migration to Bare Metal
 
 ## Story
 

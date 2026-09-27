@@ -1,13 +1,19 @@
 ---
 status: implemented
-priority: should
 author: eve
 date: 2025-04-10
-tags: [monitoring, grafana, observability]
-implements: [OPP-003]
-title: Unified Grafana Dashboard for All Services
+
+priority: should
+
+tags:
+  - monitoring
+  - grafana
+  - observability
+implements:
+  - OPP-003
 ---
 
+# Unified Grafana Dashboard for All Services
 
 ## Story
 

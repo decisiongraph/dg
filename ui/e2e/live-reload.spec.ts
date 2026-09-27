@@ -19,7 +19,7 @@ test('editing a doc triggers a rebuild that reaches the served data', async ({ p
 	test.setTimeout(90_000);
 
 	const marker = `live-reload-check-${test.info().workerIndex}`;
-	const docPath = path.join(server.dir, 'docs/architecture/adr-001.md');
+	const docPath = path.join(server.dir, 'docs/architecture/adr-001-use-postgresql-as-primary-database.md');
 	fs.appendFileSync(docPath, `\n\nRebuild sentinel: ${marker}\n`);
 
 	// Poll the generated data until the watcher+rebuild pipeline picks up the change

@@ -1,14 +1,21 @@
 ---
 status: approved
-priority: must
 author: alice
 date: 2025-04-15
-tags: [collaboration, websocket, crdt]
-depends_on: [ADR-001]
-implements: [OPP-001]
-title: Real-time Document Sync via WebSocket
+
+priority: must
+
+tags:
+  - collaboration
+  - websocket
+  - crdt
+depends_on:
+  - ADR-001
+implements:
+  - OPP-001
 ---
 
+# Real-time Document Sync via WebSocket
 
 ## Story
 

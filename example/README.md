@@ -85,6 +85,19 @@ graph TD
   - **Data** (@team/data) - Data engineering and analytics (Lead: Eve Martinez)
 - **Product** (@team/product) - Product management and strategy (Lead: Carol Davis)
 
+## Risks
+
+> [!WARNING]
+> Customer data lives in one PostgreSQL cluster on self-hosted Kubernetes, so a breach or an outage there hits every service at once.
+
+### Data breach and GDPR
+
+Example EU GmbH processes EU personal data. Mitigated by encryption at rest, least-privilege access and the data retention policy.
+
+### Data loss and availability
+
+Database or cluster failure. Mitigated by replicas and tested restores.
+
 ## Local development
 
 ### Prerequisites
