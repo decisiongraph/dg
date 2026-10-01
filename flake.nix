@@ -119,10 +119,12 @@
         bun2nix.overlays.default
         (final: prev: { dg = mkDg final; });
 
-      packages = forAllSystems (pkgs: {
+      packages = forAllSystems (pkgs: rec {
         dg = pkgs.dg;
-        # Latest release binaries: no compile, cheap to evaluate
-        dg-bin = pkgs.callPackage ./nix/dg-bin.nix { };
+        # Latest release binaries: no compile, cheap to evaluate.
+        # `nix run github:decisiongraph/dg#prebuilt`; dg-bin kept as alias.
+        prebuilt = pkgs.callPackage ./nix/dg-bin.nix { };
+        dg-bin = prebuilt;
         dg-ui = mkUi pkgs;
         # Pinned bun2nix CLI so `nix run .#bun2nix` regenerates ui/bun.nix
         # with the same version CI checks against.

@@ -249,7 +249,7 @@ jobs:
           git commit --no-gpg-sign -m "chore: update dg to ${TAG}"
           git push origin HEAD
 
-  # nix/dg-bin.nix reads nix/release.json. A tag can't hold hashes of its own
+  # Flake #prebuilt (nix/dg-bin.nix) reads nix/release.json. A tag can't hold hashes of its own
   # assets, so write them to main after the release; consumers tracking main
   # then get the new binaries on `devenv update dg`.
   update-nix-release:

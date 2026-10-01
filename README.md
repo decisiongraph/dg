@@ -19,8 +19,12 @@ cargo build --release
 The repo is a Nix flake exposing a `dg` package:
 
 ```bash
-nix run github:decisiongraph/dg -- --version   # run without installing
-nix profile install github:decisiongraph/dg    # install to profile
+nix run github:decisiongraph/dg -- --version            # run without installing
+nix profile install github:decisiongraph/dg             # install to profile
+
+# Latest GitHub release binary: no compile, no cache needed
+nix run github:decisiongraph/dg#prebuilt -- --version
+nix profile install github:decisiongraph/dg#prebuilt
 ```
 
 Prebuilt binaries for `x86_64-linux`, `aarch64-linux` and `aarch64-darwin` are
@@ -54,7 +58,7 @@ and the package to `devenv.nix`:
 `devenv update dg` moves to the latest release: the release workflow writes the
 binaries' hashes to `nix/release.json` on `main`. To pin a version, pin the
 commit that updated `release.json` (a tag can't contain its own hashes). Flake
-users get the same package as `packages.<system>.dg-bin`.
+users get the same package as `packages.<system>.prebuilt` (alias `dg-bin`).
 
 To build from source instead, use the flake input with the cache:
 
